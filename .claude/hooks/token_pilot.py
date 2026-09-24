@@ -219,7 +219,7 @@ def main():
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": (
-                f"[Token Pilot] {hint} {ACTIONS.get(key, '')} A detecção é heurística: "
+                f"[Token Pilot] {' '.join(filter(None, [hint, ACTIONS.get(key)]))} A detecção é heurística: "
                 "confira pelo histórico real da conversa antes de agir."
             ),
         },
