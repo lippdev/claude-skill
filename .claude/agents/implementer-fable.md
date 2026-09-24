@@ -1,6 +1,6 @@
 ---
 name: implementer-fable
-description: Último nível de execução: parte da tarefa que falhou duas vezes também no implementer-high. Fable 5.1 com effort high.
+description: Último nível de execução: parte da tarefa que falhou duas vezes também no implementer-high. Fable 5.1 com effort high. Use automaticamente ao atingir esse número de falhas, sem pedir ao usuário para trocar de modelo.
 model: fable
 effort: high
 ---

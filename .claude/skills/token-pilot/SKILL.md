@@ -25,8 +25,8 @@ A política completa (tabela de decisão, sinais e mensagens prontas) está em
   - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
   - `implementer` → `implementer-high` → `implementer-fable`: edição, subindo de nível
     a cada 2 falhas na mesma parte. Nunca delegue edições para Haiku ou Sonnet.
-- **Tarefa grande (analisar + decidir + implementar)?** Use a skill `big-task`, que
-  coordena tudo isso sozinha. Edições pequenas e pontuais podem ficar na sessão principal.
+- **Tarefa grande (analisar + decidir + implementar)?** Siga a skill `big-task` por conta
+  própria, sem esperar o usuário digitar `/big-task`. Edições pequenas e pontuais podem ficar na sessão principal.
 - **As skills `/boost` e `/escalate` mudam o modelo/effort só enquanto estão ativas**
   (frontmatter `model`/`effort`). Isso é o jeito mais barato de "subir e voltar": a sessão
   volta sozinha ao padrão quando a skill termina.
@@ -64,9 +64,9 @@ comportamento errado):
    Só se o usuário tiver trocado manualmente (`/model`, `/effort`), lembre-o de voltar
    com `/model opus` e `/effort medium`.
 
-O hook `token_pilot.py`, se instalado, conta esses sinais e injeta um lembrete no
-contexto. Siga o lembrete, mas confirme pelo histórico real da conversa: o hook
-usa heurística de palavras e pode errar.
+O hook `token_pilot.py` conta esses sinais e injeta no contexto a ação a tomar. Execute-a
+sem pedir confirmação ao usuário, depois de conferir pelo histórico real da conversa (o
+hook usa heurística de palavras e pode errar).
 
 ### 3. Durante a sessão
 

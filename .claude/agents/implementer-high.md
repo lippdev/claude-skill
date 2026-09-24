@@ -1,6 +1,6 @@
 ---
 name: implementer-high
-description: Executa uma parte da tarefa que já falhou duas vezes no implementer. Opus 5.5 com effort high.
+description: Executa uma parte da tarefa que já falhou duas vezes no implementer. Opus 5.5 com effort high. Use automaticamente ao atingir esse número de falhas, sem pedir ao usuário para trocar de modelo.
 model: opus
 effort: high
 ---

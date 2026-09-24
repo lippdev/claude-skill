@@ -11,6 +11,16 @@ daily driver":
 
 ## Como funciona
 
+Tudo roda sozinho, sem comandos:
+
+- **Ao abrir a sessão**, o hook injeta as regras de delegação no contexto do Claude.
+- **A cada mensagem**, o hook detecta tarefa grande ou trava e diz ao Claude o que fazer
+  (seguir o `big-task` ou delegar ao nível acima). Você só vê um aviso curto `💡 Token Pilot`.
+- **Os agentes** têm descrições "use proativamente", então o Claude delega busca, logs e
+  testes aos modelos baratos por conta própria.
+
+Os comandos `/big-task`, `/boost` e `/escalate` continuam existindo para forçar o fluxo.
+
 O Claude não consegue trocar o modelo da sessão principal sozinho, mas consegue escolher
 o modelo de cada **subagente**. Então a sessão principal vira uma coordenadora que nunca
 troca de modelo (o cache dela não é refeito) e manda cada parte para o agente certo:
@@ -60,7 +70,7 @@ nível de execução.
 
 ## O hook
 
-A cada prompt, `token_pilot.py` atualiza um estado por sessão em `~/.claude/token-pilot/`:
+No início da sessão, `token_pilot.py` injeta as regras de delegação. A cada prompt, atualiza um estado por sessão em `~/.claude/token-pilot/`:
 
 | Sinal no prompt | Efeito |
 |---|---|
@@ -68,13 +78,13 @@ A cada prompt, `token_pilot.py` atualiza um estado por sessão em `~/.claude/tok
 | 4 mensagens seguidas | a próxima tentativa vai para `implementer-fable` |
 | "funcionou", "resolvido", "works" depois de subir | aviso de volta ao nível padrão |
 | "nova tarefa", "agora…", "next task" | sugere `/clear` |
-| primeiro prompt com "refatorar", "vários arquivos", "migrar" | sugere plan mode |
+| tarefa grande: 2 etapas no mesmo pedido ("analisa… e implementa", "ideias… e cria"), "refatorar", "vários arquivos", ou pedido longo | o Claude segue o `big-task` sozinho |
 | 30 prompts sem `/compact`, ou transcript acima de 2 MB | sugere `/compact` com nota |
 
 A detecção é por palavras-chave, então o Claude confere o histórico real antes de agir.
 Limiares ajustáveis: `TOKEN_PILOT_STALLS_TO_BOOST` (2), `TOKEN_PILOT_STALLS_TO_ESCALATE` (4),
 `TOKEN_PILOT_PROMPTS_TO_COMPACT` (30), `TOKEN_PILOT_TRANSCRIPT_MB` (2),
-`TOKEN_PILOT_STATE_DIR` (`~/.claude/token-pilot`).
+`TOKEN_PILOT_BIG_PROMPT_CHARS` (600), `TOKEN_PILOT_STATE_DIR` (`~/.claude/token-pilot`).
 
 ## Integração com um app de memória
 
@@ -91,7 +101,8 @@ vez de sobrescrever. Abra uma sessão nova: agentes e skills são carregados no 
 
 **Em todos os projetos:** copie `skills/` e `agents/` para `~/.claude/`, o hook para
 `~/.claude/hooks/token_pilot.py`, e registre-o em `~/.claude/settings.json` com
-`"command": "python3 ~/.claude/hooks/token_pilot.py"`.
+`"command": "python3 ~/.claude/hooks/token_pilot.py"` nos eventos `SessionStart` e
+`UserPromptSubmit`.
 
 Requer Python 3.
 

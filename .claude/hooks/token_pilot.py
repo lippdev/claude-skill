@@ -59,6 +59,40 @@ MULTI_FILE_PATTERNS = [
     r"\bacross the (codebase|repo)\b",
 ]
 
+# Frases que indicam as três etapas de uma tarefa grande.
+PHASE_PATTERNS = [
+    [r"\banalis", r"\bentend", r"\binvestig", r"\bmapea", r"\banaly[sz]", r"\bunderstand"],
+    [r"\bbrainstorm", r"\bideias?\b", r"\bsugest", r"\bpropo(r|nha)", r"\bmelhorias\b", r"\bideas?\b"],
+    [r"\bimplement", r"\badicion", r"\bcri(ar|e)\b", r"\bconstru", r"\bdesenvolv", r"\bbuild\b", r"\badd\b"],
+]
+BIG_PROMPT_CHARS = int(os.environ.get("TOKEN_PILOT_BIG_PROMPT_CHARS", "600"))
+
+# Regras injetadas no início de toda sessão, para o fluxo funcionar sem comandos.
+SESSION_RULES = """[Token Pilot] Regras desta sessão (aplique sem esperar comando do usuário):
+- Busca/localização de código -> subagente scout (Haiku). Logs/CI -> log-reader (Haiku).
+  Rodar testes -> verifier (Haiku). Entender um fluxo em vários arquivos -> researcher (Sonnet).
+- Tarefa grande (analisar + decidir + implementar, ou vários arquivos) -> siga a skill
+  big-task automaticamente: análise com scouts em paralelo, brainstorm no ideator,
+  execução no implementer, verificação no verifier.
+- Edição pontual (1-2 arquivos conhecidos) -> faça na sessão principal.
+- Mesma parte falhou 2x -> delegue ao implementer-high; falhou 2x nele -> implementer-fable.
+  Resolveu -> a próxima parte volta ao implementer. Nunca peça ao usuário para trocar /model ou /effort.
+- Assunto novo sem relação -> sugira /clear. Conversa longa num intervalo -> sugira /compact com nota."""
+
+# O que o Claude deve fazer para cada dica (o usuário vê só a dica curta).
+ACTIONS = {
+    "big_task": "Siga a skill big-task agora para esta tarefa, sem esperar /big-task.",
+    "boost": "Delegue a próxima tentativa ao subagente implementer-high, passando o que já falhou.",
+    "escalate": "Delegue a próxima tentativa ao subagente implementer-fable, passando o que já falhou.",
+}
+
+
+def is_big_task(prompt):
+    if matches(MULTI_FILE_PATTERNS, prompt):
+        return True
+    phases = sum(1 for group in PHASE_PATTERNS if matches(group, prompt))
+    return phases >= 2 or (len(prompt) >= BIG_PROMPT_CHARS and phases >= 1)
+
 
 def matches(patterns, text):
     return any(re.search(p, text, re.IGNORECASE | re.MULTILINE) for p in patterns)
@@ -130,8 +164,12 @@ def decide(state, prompt, transcript_path):
             )
         return None, None
 
-    if state["prompts"] == 1 and matches(MULTI_FILE_PATTERNS, prompt):
-        return "plan", "Tarefa que mexe em vários arquivos: entre em plan mode (Shift+Tab) antes de editar."
+    if is_big_task(prompt) and state["prompts"] - state.get("big_task_at", -99) > 5:
+        state["big_task_at"] = state["prompts"]
+        return "big_task", (
+            "Tarefa grande detectada. O Claude vai dividir em análise (Haiku/Sonnet), "
+            "brainstorm (Opus high) e execução (Opus medium, subindo se travar)."
+        )
 
     too_long = state["since_compact"] >= PROMPTS_TO_COMPACT or (
         transcript_mb(transcript_path) >= TRANSCRIPT_MB_TO_COMPACT and state["since_compact"] >= 10
@@ -150,6 +188,11 @@ def main():
     try:
         data = json.load(sys.stdin)
     except ValueError:
+        return 0
+
+    if data.get("hook_event_name") == "SessionStart":
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "SessionStart", "additionalContext": SESSION_RULES}}, ensure_ascii=False))
         return 0
 
     prompt = data.get("prompt") or ""
@@ -176,9 +219,8 @@ def main():
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": (
-                f"[Token Pilot] {hint} Confirme pelo histórico real da conversa antes de "
-                "repetir a recomendação ao usuário (a detecção é heurística). "
-                "Siga a skill token-pilot."
+                f"[Token Pilot] {hint} {ACTIONS.get(key, '')} A detecção é heurística: "
+                "confira pelo histórico real da conversa antes de agir."
             ),
         },
     }, ensure_ascii=False))

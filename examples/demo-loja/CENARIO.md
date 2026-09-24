@@ -20,7 +20,18 @@ claude
 Confira com `/agents` se aparecem os 8 agentes (scout, log-reader, verifier, researcher,
 ideator, implementer, implementer-high, implementer-fable).
 
-## Teste 1: tarefa grande com pausa (o mais completo)
+## Teste 0: sem comandos (o fluxo nativo)
+
+Peça normalmente, sem `/`:
+
+```
+Analisa o carrinho, corrige os testes que falham e me dá ideias de cupons de desconto para implementar
+```
+
+O esperado: aparece `💡 Token Pilot: Tarefa grande detectada...` e o Claude segue sozinho
+o mesmo fluxo do Teste 1 (scouts, ideator, implementer, verifier).
+
+## Teste 1: tarefa grande com pausa, forçando pelo comando
 
 ```
 /big-task Corrigir os testes que falham e adicionar cupons de desconto ao carrinho

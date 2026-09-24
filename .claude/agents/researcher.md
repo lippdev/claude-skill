@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Pesquisa que exige ler e comparar vários arquivos, como entender um fluxo ou como um módulo é usado. Mais capaz que o scout e mais barato que a sessão principal. Somente leitura.
+description: Pesquisa que exige ler e comparar vários arquivos, como entender um fluxo ou como um módulo é usado. Mais capaz que o scout e mais barato que a sessão principal. Somente leitura. Use proativamente, sem esperar o usuário pedir.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash

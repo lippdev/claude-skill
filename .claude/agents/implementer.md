@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Edita código para executar uma parte bem definida da tarefa e verifica o resultado. Nível padrão de execução (Opus 5.5, effort medium).
+description: Edita código para executar uma parte bem definida da tarefa e verifica o resultado. Nível padrão de execução (Opus 5.5, effort medium). Use proativamente, sem esperar o usuário pedir.
 model: opus
 effort: medium
 ---

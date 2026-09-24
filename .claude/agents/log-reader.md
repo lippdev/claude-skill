@@ -1,6 +1,6 @@
 ---
 name: log-reader
-description: Lê e resume logs, saídas de CI, stack traces e saídas longas de comandos. Use em vez de ler logs grandes na sessão principal. Somente leitura.
+description: Lê e resume logs, saídas de CI, stack traces e saídas longas de comandos. Use em vez de ler logs grandes na sessão principal. Somente leitura. Use proativamente, sem esperar o usuário pedir.
 model: haiku
 effort: low
 tools: Read, Grep, Bash

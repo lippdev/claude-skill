@@ -17,13 +17,21 @@ class HookSession:
         self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir)
         self.session = session
 
-    def send(self, prompt, raw=None):
-        data = raw if raw is not None else json.dumps(
-            {"session_id": self.session, "prompt": prompt, "transcript_path": "/nao/existe"})
+    def run(self, data):
         out = subprocess.run([sys.executable, str(HOOK)], input=data, capture_output=True,
                              text=True, env=self.env, check=False)
         assert out.returncode == 0, out.stderr
-        return json.loads(out.stdout)["systemMessage"] if out.stdout.strip() else None
+        return json.loads(out.stdout) if out.stdout.strip() else None
+
+    def send(self, prompt, raw=None):
+        data = raw if raw is not None else json.dumps(
+            {"session_id": self.session, "prompt": prompt, "transcript_path": "/nao/existe"})
+        out = self.run(data)
+        return out["systemMessage"] if out else None
+
+    def context(self, prompt):
+        out = self.run(json.dumps({"session_id": self.session, "prompt": prompt}))
+        return out["hookSpecificOutput"]["additionalContext"] if out else None
 
 
 class TestHook(unittest.TestCase):
@@ -42,8 +50,30 @@ class TestHook(unittest.TestCase):
         self.assertIn("implementer-fable", self.s.send("de novo o mesmo erro"))
         self.assertIn("voltam ao", self.s.send("funcionou, valeu!"))
 
-    def test_plan_mode_em_tarefa_grande(self):
-        self.assertIn("plan mode", self.s.send("refatorar o checkout em vários arquivos"))
+    def test_regras_no_inicio_da_sessao(self):
+        out = self.s.run(json.dumps({"hook_event_name": "SessionStart", "session_id": "x"}))
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        for agente in ("scout", "big-task", "implementer-high", "implementer-fable"):
+            self.assertIn(agente, ctx)
+
+    def test_tarefa_grande_aciona_big_task_sozinha(self):
+        ctx = self.s.context("analisa o módulo de pagamento, me dá ideias de melhorias e implementa")
+        self.assertIn("skill big-task", ctx)
+
+    def test_refatoracao_aciona_big_task(self):
+        self.assertIn("Tarefa grande", self.s.send("refatorar o checkout em vários arquivos"))
+
+    def test_big_task_nao_repete_na_mesma_tarefa(self):
+        self.s.send("analisa o carrinho e implementa cupons")
+        self.s.send("ok")
+        self.assertIsNone(self.s.send("analisa o frete e implementa isso também"))
+
+    def test_pedido_simples_nao_aciona_big_task(self):
+        self.assertIsNone(self.s.send("corrige o typo no README"))
+
+    def test_escalada_manda_delegar(self):
+        self.s.send("mesmo erro")
+        self.assertIn("Delegue", self.s.context("mesmo erro"))
 
     def test_nova_tarefa_sugere_clear(self):
         for i in range(6):
