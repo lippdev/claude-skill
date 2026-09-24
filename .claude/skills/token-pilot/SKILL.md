@@ -17,12 +17,16 @@ A política completa (tabela de decisão, sinais e mensagens prontas) está em
 - **Você não troca o modelo nem o effort da sessão principal sozinho.** Só o usuário faz isso
   com `/model <nome>` e `/effort <nível>`. Quando a troca for recomendada, diga o comando
   exato em uma linha, e explique o motivo em no máximo uma frase.
-- **Você escolhe o modelo dos subagentes.** Use os agentes deste pacote, ou passe `model`
-  na ferramenta Agent:
-  - `scout` (Haiku, effort low): localizar arquivos, símbolos, grep amplo.
-  - `log-reader` (Haiku, effort low): ler e resumir logs, saídas de CI, stack traces.
-  - `researcher` (Sonnet, effort medium): pesquisa que exige ler e comparar vários arquivos.
-  - Edição de código fica na sessão principal (Opus 5.5). Nunca delegue edições para Haiku.
+- **Você escolhe o modelo dos subagentes, e isso é automático.** Delegue por padrão:
+  - `scout` (Haiku, low): localizar arquivos, símbolos, grep amplo.
+  - `log-reader` (Haiku, low): ler e resumir logs, saídas de CI, stack traces.
+  - `verifier` (Haiku, low): rodar testes/build/lint e resumir.
+  - `researcher` (Sonnet, medium): pesquisa que exige ler e comparar vários arquivos.
+  - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
+  - `implementer` → `implementer-high` → `implementer-fable`: edição, subindo de nível
+    a cada 2 falhas na mesma parte. Nunca delegue edições para Haiku ou Sonnet.
+- **Tarefa grande (analisar + decidir + implementar)?** Use a skill `big-task`, que
+  coordena tudo isso sozinha. Edições pequenas e pontuais podem ficar na sessão principal.
 - **As skills `/boost` e `/escalate` mudam o modelo/effort só enquanto estão ativas**
   (frontmatter `model`/`effort`). Isso é o jeito mais barato de "subir e voltar": a sessão
   volta sozinha ao padrão quando a skill termina.
@@ -51,13 +55,14 @@ Conte as tentativas no **mesmo** problema (mesmo erro, mesmo teste falhando, mes
 comportamento errado):
 
 1. Primeira falha no `medium`: tente de novo normalmente.
-2. Segunda falha no `medium`: recomende subir para `high`, **num intervalo** (entre
-   tarefas, não no meio de uma edição), porque mudar o effort gera uma nova escrita de
-   cache. Ofereça `/boost` como alternativa que volta sozinha ao normal.
-3. Duas falhas no `high`: recomende `/escalate` (Fable 5.1, só durante a skill) ou
-   `/model fable`.
-4. Problema resolvido depois de subir: recomende voltar (`/model opus`, `/effort medium`)
-   na mesma mensagem que confirma a solução.
+2. Segunda falha no `medium`: **delegue automaticamente** a correção ao `implementer-high`,
+   passando o que já foi tentado. A sessão principal não troca de effort, então o cache
+   dela não é refeito. (`/boost` é a alternativa manual.)
+3. Duas falhas no `implementer-high`: delegue ao `implementer-fable`. (`/escalate` é a
+   alternativa manual.)
+4. Resolvido: a próxima parte volta a começar no nível padrão. Não há nada para desligar.
+   Só se o usuário tiver trocado manualmente (`/model`, `/effort`), lembre-o de voltar
+   com `/model opus` e `/effort medium`.
 
 O hook `token_pilot.py`, se instalado, conta esses sinais e injeta um lembrete no
 contexto. Siga o lembrete, mas confirme pelo histórico real da conversa: o hook

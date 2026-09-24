@@ -1,83 +1,108 @@
 # Token Pilot
 
-Pacote para Claude Code que escolhe o modelo e o effort certos para cada momento da
-sessão, para gastar menos tokens. Segue o guia "Making Opus 5.5 your daily driver":
+Pacote para Claude Code que manda cada parte do trabalho para o modelo e o effort mais
+baratos que dão conta dela, para gastar menos tokens. Segue o guia "Making Opus 5.5 your
+daily driver":
 
 1. **Antes de começar:** Opus 5.5 com effort `medium`. Plan mode para mudanças em vários arquivos.
-2. **Quando travar:** `medium` → `high` (num intervalo, porque a troca gera escrita de cache).
-   Se o `high` travar duas vezes → Fable 5.1. Volte ao padrão quando resolver.
-3. **Durante a sessão:** busca e logs em subagentes Sonnet/Haiku, edição no Opus 5.5.
-   `/clear` entre tarefas sem relação, `/compact` com nota nos intervalos.
+2. **Quando travar:** `medium` → `high`; se o `high` travar duas vezes → Fable 5.1. Volta ao padrão quando resolver.
+3. **Durante a sessão:** busca e logs no Sonnet/Haiku, edição no Opus 5.5. `/clear` entre tarefas, `/compact` com nota.
 4. **Meça:** compare o `/usage` de cada modelo numa tarefa real.
+
+## Como funciona
+
+O Claude não consegue trocar o modelo da sessão principal sozinho, mas consegue escolher
+o modelo de cada **subagente**. Então a sessão principal vira uma coordenadora que nunca
+troca de modelo (o cache dela não é refeito) e manda cada parte para o agente certo:
+
+```
+/big-task <tarefa>          (sessão principal: Opus 5.5, medium, contexto pequeno)
+│
+├─ Análise     scout ×N (Haiku, low) em paralelo + researcher (Sonnet, medium)
+├─ Brainstorm  ideator (Opus 5.5, high), recebe só o resumo      ⏸ você escolhe
+├─ Execução    implementer (Opus 5.5, medium) por parte
+│              ├─ 2 falhas → implementer-high (Opus 5.5, high)
+│              └─ 2 falhas → implementer-fable (Fable 5.1, high)
+└─ Conferência verifier (Haiku, low)
+```
+
+Os subagentes não veem a conversa. A memória compartilhada deles é o brief em
+`.token-pilot/brief.md`, que só a coordenadora escreve (objetivo, mapa do código,
+decisão, plano, falhas, comando de verificação).
 
 ## O que vem no pacote
 
 | Arquivo | O que faz |
 |---|---|
-| `.claude/skills/token-pilot/` | Skill principal. O Claude a usa sozinho para recomendar modelo, effort, `/clear`, `/compact` e delegação. |
-| `.claude/skills/boost/` | `/boost <problema>`: roda a tarefa com effort `high` e volta ao normal ao terminar. |
-| `.claude/skills/escalate/` | `/escalate <problema>`: roda a tarefa no Fable 5.1 e volta ao modelo da sessão ao terminar. |
-| `.claude/agents/scout.md` | Subagente Haiku (effort low) para localizar código. |
-| `.claude/agents/log-reader.md` | Subagente Haiku (effort low) para resumir logs e saídas de CI. |
-| `.claude/agents/researcher.md` | Subagente Sonnet (effort medium) para pesquisa em vários arquivos. |
-| `.claude/hooks/token_pilot.py` | Hook que mede o uso da sessão e avisa quando vale trocar. |
+| `.claude/skills/big-task/` | `/big-task <tarefa> [--auto]`: a coordenadora. `--auto` pula as pausas. |
+| `.claude/skills/token-pilot/` | Regras gerais. O Claude a usa sozinho para delegar, escalar e sugerir `/clear`/`/compact`. |
+| `.claude/skills/boost/` | `/boost <problema>`: effort `high` na sessão principal só durante a tarefa (manual). |
+| `.claude/skills/escalate/` | `/escalate <problema>`: Fable 5.1 na sessão principal só durante a tarefa (manual). |
+| `.claude/agents/` | 8 agentes, cada um com modelo e effort fixos (tabela abaixo). |
+| `.claude/hooks/token_pilot.py` | Hook que detecta travas e conversa longa e avisa. |
 | `.claude/settings.json` | Padrão Opus 5.5 + `medium` e registro do hook. |
+| `tests/` | Validação do pacote e testes do hook, sem chamar modelo. |
+| `examples/demo-loja/` | Projeto de demonstração com bug proposital e roteiro de teste. |
 
-## Como a troca funciona
+| Agente | Modelo | Effort | Edita? | Para |
+|---|---|---|---|---|
+| `scout` | Haiku | low | não | localizar código |
+| `log-reader` | Haiku | low | não | resumir logs e CI |
+| `verifier` | Haiku | low | não | rodar testes e resumir |
+| `researcher` | Sonnet | medium | não | entender fluxos |
+| `ideator` | Opus 5.5 | high | não | brainstorm |
+| `implementer` | Opus 5.5 | medium | sim | editar (padrão) |
+| `implementer-high` | Opus 5.5 | high | sim | 2 falhas no implementer |
+| `implementer-fable` | Fable 5.1 | high | sim | 2 falhas no implementer-high |
 
-O Claude não consegue trocar o modelo ou o effort da sessão principal sozinho. O pacote
-usa três caminhos:
+O effort de um subagente só pode ser definido no arquivo dele, por isso há um agente por
+nível de execução.
 
-- **Automático e temporário:** `/boost` e `/escalate` definem `effort`/`model` no
-  frontmatter da skill, então a troca vale só enquanto a skill roda e depois volta.
-- **Automático para subagentes:** busca e leitura de logs vão para Haiku/Sonnet pelo
-  frontmatter dos agentes.
-- **Recomendado:** para a sessão principal, o Claude (e o hook) dizem o comando exato:
-  `/effort high`, `/model fable`, `/model opus`, `/effort medium`, `/clear`, `/compact ...`.
-
-## Como o hook mede o uso
+## O hook
 
 A cada prompt, `token_pilot.py` atualiza um estado por sessão em `~/.claude/token-pilot/`:
 
 | Sinal no prompt | Efeito |
 |---|---|
-| "ainda não funciona", "mesmo erro", "de novo", "still failing"… | conta uma falha no mesmo problema |
-| 2 falhas seguidas | sugere `/effort high` ou `/boost` |
-| 4 falhas seguidas | sugere `/escalate` ou `/model fable` |
-| "funcionou", "resolvido", "works", "fixed"… depois de subir | sugere voltar para `/model opus` + `/effort medium` |
-| "nova tarefa", "agora…", "next task"… | sugere `/clear` |
-| primeiro prompt com "refatorar", "vários arquivos", "migrar"… | sugere plan mode |
-| 30 prompts desde o último `/compact`, ou transcript acima de 2 MB | sugere `/compact` com nota |
+| 2 mensagens seguidas tipo "ainda não funciona", "mesmo erro", "de novo" | a próxima tentativa vai para `implementer-high` |
+| 4 mensagens seguidas | a próxima tentativa vai para `implementer-fable` |
+| "funcionou", "resolvido", "works" depois de subir | aviso de volta ao nível padrão |
+| "nova tarefa", "agora…", "next task" | sugere `/clear` |
+| primeiro prompt com "refatorar", "vários arquivos", "migrar" | sugere plan mode |
+| 30 prompts sem `/compact`, ou transcript acima de 2 MB | sugere `/compact` com nota |
 
-A mesma dica não é repetida em seguida. A detecção é por palavras-chave, então o hook
-pede ao Claude para confirmar pelo histórico real antes de repetir a recomendação.
+A detecção é por palavras-chave, então o Claude confere o histórico real antes de agir.
+Limiares ajustáveis: `TOKEN_PILOT_STALLS_TO_BOOST` (2), `TOKEN_PILOT_STALLS_TO_ESCALATE` (4),
+`TOKEN_PILOT_PROMPTS_TO_COMPACT` (30), `TOKEN_PILOT_TRANSCRIPT_MB` (2),
+`TOKEN_PILOT_STATE_DIR` (`~/.claude/token-pilot`).
 
-Ajuste os limiares por variável de ambiente:
+## Integração com um app de memória
 
-| Variável | Padrão |
-|---|---|
-| `TOKEN_PILOT_STALLS_TO_BOOST` | `2` |
-| `TOKEN_PILOT_STALLS_TO_ESCALATE` | `4` |
-| `TOKEN_PILOT_PROMPTS_TO_COMPACT` | `30` |
-| `TOKEN_PILOT_TRANSCRIPT_MB` | `2` |
-| `TOKEN_PILOT_STATE_DIR` | `~/.claude/token-pilot` |
+O brief em arquivo é a memória padrão. Para trocar por um app de memória global, exponha
+o app como servidor MCP (ou CLI) com "ler contexto" e "gravar contexto" e defina
+`TOKEN_PILOT_MEMORY`. O contrato está em
+[`.claude/skills/big-task/reference.md`](.claude/skills/big-task/reference.md#memória-externa).
 
 ## Instalação
 
-**Num projeto:** copie a pasta `.claude/` para a raiz do projeto. Se o projeto já tiver
-`.claude/settings.json`, junte a seção `hooks` em vez de sobrescrever.
+**Num projeto:** copie a pasta `.claude/` para a raiz do projeto e adicione `.token-pilot/`
+ao `.gitignore`. Se o projeto já tiver `.claude/settings.json`, junte a seção `hooks` em
+vez de sobrescrever. Abra uma sessão nova: agentes e skills são carregados no início.
 
-**Em todos os projetos:** copie `skills/` e `agents/` para `~/.claude/`, copie o hook para
-`~/.claude/hooks/token_pilot.py` e registre em `~/.claude/settings.json` com
+**Em todos os projetos:** copie `skills/` e `agents/` para `~/.claude/`, o hook para
+`~/.claude/hooks/token_pilot.py`, e registre-o em `~/.claude/settings.json` com
 `"command": "python3 ~/.claude/hooks/token_pilot.py"`.
 
 Requer Python 3.
 
-## Testar o hook
+## Testar
+
+Sem gastar tokens:
 
 ```bash
-echo '{"session_id":"teste","prompt":"continua dando o mesmo erro"}' | python3 .claude/hooks/token_pilot.py
-echo '{"session_id":"teste","prompt":"ainda não funcionou"}' | python3 .claude/hooks/token_pilot.py
+python3 tests/validate_package.py   # modelos/efforts dos agentes, skills, links, hook registrado
+python3 tests/test_hook.py          # simula uma sessão contra o hook
 ```
 
-A segunda chamada deve sugerir `/effort high` ou `/boost`.
+Com o Claude, no projeto de demonstração: siga
+[`examples/demo-loja/CENARIO.md`](examples/demo-loja/CENARIO.md).

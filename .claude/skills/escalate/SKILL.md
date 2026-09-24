@@ -4,7 +4,7 @@ description: Resolve um problema que travou até no effort high trocando para Fa
 model: fable
 effort: high
 disable-model-invocation: true
-arguments: problem
+argument-hint: "<problema>"
 ---
 
 # Escalate (Fable 5.1)
@@ -12,7 +12,7 @@ arguments: problem
 O problema resistiu ao Opus 5.5 em `medium` e em `high`. Você está rodando no Fable 5.1
 só enquanto esta skill estiver ativa. Quando terminar, a sessão volta ao modelo anterior.
 
-Problema: $problem
+Problema: $ARGUMENTS
 
 1. Leia o histórico da conversa e liste as abordagens que já falharam e a evidência de cada falha.
 2. Questione as premissas: o erro está mesmo onde todos procuraram? Leia o código real

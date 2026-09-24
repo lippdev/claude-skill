@@ -101,8 +101,8 @@ def decide(state, prompt, transcript_path):
         state["level"] = 1
         if was_raised:
             return "resolved", (
-                "Problema resolvido depois de subir de nível. "
-                "Volte ao padrão: /model opus e /effort medium."
+                "Problema resolvido depois de subir de nível. As próximas partes voltam ao "
+                "implementer (Opus 5.5, medium). Se você trocou o modelo à mão, use /model opus e /effort medium."
             )
         return None, None
 
@@ -118,13 +118,15 @@ def decide(state, prompt, transcript_path):
             state["level"] = 3
             return "escalate", (
                 f"{state['stalls']} falhas seguidas no mesmo problema, já no high. "
-                "Use /escalate <problema> (Fable 5.1 só nesta tarefa) ou /model fable."
+                "A próxima tentativa vai para o subagente implementer-fable (Fable 5.1), "
+                "com o histórico das falhas."
             )
         if state["stalls"] >= STALLS_TO_BOOST and state["level"] < 2:
             state["level"] = 2
             return "boost", (
                 f"{state['stalls']} falhas seguidas no mesmo problema no medium. "
-                "Num intervalo, use /effort high ou /boost <problema> só para este ponto."
+                "A próxima tentativa vai para o subagente implementer-high (Opus 5.5, high), "
+                "com o histórico das falhas."
             )
         return None, None
 

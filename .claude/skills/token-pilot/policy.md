@@ -8,10 +8,10 @@ Opus 5.5 com effort `medium` e só saia disso com motivo.
 
 | Nível | Modelo | Effort | Quando | Como entrar | Como sair |
 |---|---|---|---|---|---|
-| 0 – Leve | Haiku / Sonnet (subagente) | `low` | Busca, grep, leitura de logs | agentes `scout`, `log-reader`, `researcher` | termina sozinho |
+| 0 – Leve | Haiku / Sonnet (subagente) | `low`/`medium` | Busca, logs, testes, pesquisa | `scout`, `log-reader`, `verifier`, `researcher` | termina sozinho |
 | 1 – Padrão | Opus 5.5 | `medium` | Trabalho diário bem delimitado | `/model opus` + `/effort medium` | — |
-| 2 – Reforço | Opus 5.5 | `high` | 2 falhas no mesmo problema no nível 1 | `/boost <problema>` ou `/effort high` | `/effort medium` ao resolver |
-| 3 – Escalada | Fable 5.1 | `high` | 2 falhas no mesmo problema no nível 2 | `/escalate <problema>` ou `/model fable` | `/model opus` ao resolver |
+| 2 – Reforço | Opus 5.5 | `high` | 2 falhas no mesmo problema no nível 1 | subagente `implementer-high` (manual: `/boost`) | automático ao terminar |
+| 3 – Escalada | Fable 5.1 | `high` | 2 falhas no mesmo problema no nível 2 | subagente `implementer-fable` (manual: `/escalate`) | automático ao terminar |
 
 ## Sinais de "parede"
 
@@ -47,9 +47,9 @@ Por isso:
 
 - Início: `💡 Token Pilot: tarefa bem delimitada, /effort medium basta.`
 - Multi-arquivo: `💡 Token Pilot: vai mexer em vários arquivos, vale entrar em plan mode (Shift+Tab) antes.`
-- Parede 1: `💡 Token Pilot: segunda falha no mesmo erro. Num intervalo, tente /effort high, ou /boost <problema> só para este ponto.`
-- Parede 2: `💡 Token Pilot: o high também travou duas vezes. Use /escalate <problema> (Fable 5.1 só nesta tarefa) ou /model fable.`
-- Resolvido: `💡 Token Pilot: resolvido. Volte ao padrão com /model opus e /effort medium.`
+- Parede 1: `💡 Token Pilot: segunda falha no mesmo erro. Passando a correção para o implementer-high (Opus 5.5, high).`
+- Parede 2: `💡 Token Pilot: o high também travou duas vezes. Passando para o implementer-fable (Fable 5.1).`
+- Resolvido: `💡 Token Pilot: resolvido. A próxima parte volta ao implementer (Opus 5.5, medium).`
 - Nova tarefa: `💡 Token Pilot: assunto novo, /clear evita carregar o contexto antigo.`
 - Conversa longa: `💡 Token Pilot: bom momento para /compact manter: <resumo>.`
 - Medição: `💡 Token Pilot: rode a mesma tarefa em cada modelo e compare o /usage.`

@@ -7,6 +7,7 @@ tools: Read, Grep, Glob, Bash
 ---
 
 Você investiga o código e devolve uma conclusão pronta para a sessão principal agir.
+Se existir `.token-pilot/brief.md`, leia antes: ele diz o objetivo da tarefa.
 Não edite nada.
 
 - Comece pela resposta em 2 a 3 frases.
