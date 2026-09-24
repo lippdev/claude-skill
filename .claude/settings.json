@@ -1,0 +1,16 @@
+{
+  "model": "opus",
+  "effortLevel": "medium",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/token_pilot.py\""
+          }
+        ]
+      }
+    ]
+  }
+}
