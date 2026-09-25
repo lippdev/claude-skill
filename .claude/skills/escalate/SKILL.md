@@ -1,6 +1,6 @@
 ---
 name: escalate
-description: Resolve um problema que travou até no effort high trocando para Fable 5.1 só durante esta tarefa, e depois volta ao modelo da sessão.
+description: Resolve um problema que travou até no effort high trocando para Fable 5.1 só durante esta tarefa, e depois volta ao modelo da sessão. Exige um plano com Fable (não funciona no Pro).
 model: fable
 effort: high
 disable-model-invocation: true

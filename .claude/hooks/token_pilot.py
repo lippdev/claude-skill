@@ -67,23 +67,152 @@ PHASE_PATTERNS = [
 ]
 BIG_PROMPT_CHARS = int(os.environ.get("TOKEN_PILOT_BIG_PROMPT_CHARS", "600"))
 
-# Regras injetadas no início de toda sessão, para o fluxo funcionar sem comandos.
-SESSION_RULES = """[Token Pilot] Regras desta sessão (aplique sem esperar comando do usuário):
-- Busca/localização de código -> subagente scout (Haiku). Logs/CI -> log-reader (Haiku).
-  Rodar testes -> verifier (Haiku). Entender um fluxo em vários arquivos -> researcher (Sonnet).
-- Tarefa grande (analisar + decidir + implementar, ou vários arquivos) -> siga a skill
-  big-task automaticamente: análise com scouts em paralelo, brainstorm no ideator,
-  execução no implementer, verificação no verifier.
-- Edição pontual (1-2 arquivos conhecidos) -> faça na sessão principal.
-- Mesma parte falhou 2x -> delegue ao implementer-high; falhou 2x nele -> implementer-fable.
-  Resolveu -> a próxima parte volta ao implementer. Nunca peça ao usuário para trocar /model ou /effort.
-- Assunto novo sem relação -> sugira /clear. Conversa longa num intervalo -> sugira /compact com nota."""
+# Modelos por plano. Ajuste se o seu plano tiver outros modelos, ou use TOKEN_PILOT_MODELS.
+ALL_MODELS = ["haiku", "sonnet", "opus", "fable"]
+PLAN_MODELS = {
+    "pro": ["haiku", "sonnet", "opus"],
+    "max": ALL_MODELS,
+    "team": ALL_MODELS,
+    "enterprise": ALL_MODELS,
+    "api": ALL_MODELS,
+}
+MODEL_NAMES = {"haiku": "Haiku", "sonnet": "Sonnet", "opus": "Opus 5.5", "fable": "Fable 5.1"}
+# Modelo de cada agente e para onde ele vai quando esse modelo não existe no plano.
+AGENT_MODELS = {
+    "scout": "haiku", "log-reader": "haiku", "verifier": "haiku", "researcher": "sonnet",
+    "ideator": "opus", "implementer": "opus", "implementer-high": "opus", "implementer-fable": "fable",
+}
+FALLBACKS = {"haiku": ["sonnet", "opus"], "sonnet": ["opus", "haiku"], "opus": ["sonnet"], "fable": []}
+
+
+def base_dir():
+    return Path(os.environ.get("TOKEN_PILOT_STATE_DIR", Path.home() / ".claude" / "token-pilot"))
+
+
+def read_json(path):
+    try:
+        return json.loads(Path(path).read_text())
+    except (OSError, ValueError, TypeError):
+        return {}
+
+
+def parse_models(value):
+    items = value if isinstance(value, list) else str(value).split(",")
+    found = []
+    for item in items:
+        for m in ALL_MODELS:  # aceita apelido ("opus") ou ID completo ("claude-opus-5-5")
+            if m in str(item).lower() and m not in found:
+                found.append(m)
+    return found
+
+
+def settings_allowlist():
+    """availableModels das configurações do Claude Code, se alguém definiu."""
+    project = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
+    files = [Path.home() / ".claude" / "settings.json",
+             Path(project) / ".claude" / "settings.json",
+             Path(project) / ".claude" / "settings.local.json"]
+    allowed = None
+    for f in files:
+        value = read_json(f).get("availableModels")
+        if value:
+            allowed = parse_models(value)
+    return allowed
+
+
+def autodetect_plan():
+    """Tentativa sem garantia: procura um campo de plano nos arquivos locais do Claude Code."""
+    keys = {"subscriptiontype", "subscription_type", "plantype", "plan", "tier"}
+
+    def walk(obj, depth=0):
+        if isinstance(obj, dict) and depth < 4:
+            for k, v in obj.items():
+                if k.lower() in keys and isinstance(v, str):
+                    for plan in PLAN_MODELS:
+                        if plan in v.lower():
+                            return plan
+                found = walk(v, depth + 1)
+                if found:
+                    return found
+        return None
+
+    for f in (Path.home() / ".claude" / ".credentials.json", Path.home() / ".claude.json"):
+        plan = walk(read_json(f))
+        if plan:
+            return plan
+    return None
+
+
+def resolve_models():
+    """Devolve (modelos disponíveis, de onde veio a informação)."""
+    config = read_json(base_dir() / "config.json")
+    if os.environ.get("TOKEN_PILOT_MODELS"):
+        models, source = parse_models(os.environ["TOKEN_PILOT_MODELS"]), "TOKEN_PILOT_MODELS"
+    elif config.get("models"):
+        models, source = parse_models(config["models"]), "config.json"
+    elif os.environ.get("TOKEN_PILOT_PLAN", "").lower() in PLAN_MODELS:
+        plan = os.environ["TOKEN_PILOT_PLAN"].lower()
+        models, source = PLAN_MODELS[plan], f"plano {plan} (TOKEN_PILOT_PLAN)"
+    elif str(config.get("plan", "")).lower() in PLAN_MODELS:
+        plan = config["plan"].lower()
+        models, source = PLAN_MODELS[plan], f"plano {plan} (config.json)"
+    elif autodetect_plan():
+        plan = autodetect_plan()
+        models, source = PLAN_MODELS[plan], f"plano {plan} (detectado)"
+    else:
+        models, source = ALL_MODELS, "desconhecido"
+    allowed = settings_allowlist()
+    if allowed:
+        models = [m for m in models if m in allowed]
+        source += " + availableModels"
+    return list(models), source
+
+
+def model_for(agent, models):
+    """Modelo que o agente deve usar neste plano, ou None se o nível não existe."""
+    wanted = AGENT_MODELS[agent]
+    if wanted in models:
+        return wanted
+    return next((m for m in FALLBACKS[wanted] if m in models), None)
+
+
+def session_rules(models, source):
+    names = ", ".join(MODEL_NAMES[m] for m in models) or "nenhum"
+    has_fable = model_for("implementer-fable", models) is not None
+    ladder = ("falhou 2x nele -> implementer-fable." if has_fable else
+              "falhou 2x nele -> pare, resuma o que falhou e peça ajuda ao usuário (o plano não tem Fable; não use /escalate).")
+    lines = [
+        "[Token Pilot] Regras desta sessão (aplique sem esperar comando do usuário):",
+        f"- Modelos do plano do usuário: {names} (fonte: {source}).",
+        "- Busca/localização de código -> subagente scout. Logs/CI -> log-reader.",
+        "  Rodar testes -> verifier. Entender um fluxo em vários arquivos -> researcher.",
+        "- Tarefa grande (analisar + decidir + implementar, ou vários arquivos) -> siga a skill",
+        "  big-task automaticamente: análise com scouts em paralelo, brainstorm no ideator,",
+        "  execução no implementer, verificação no verifier.",
+        "- Edição pontual (1-2 arquivos conhecidos) -> faça na sessão principal.",
+        f"- Mesma parte falhou 2x -> delegue ao implementer-high; {ladder}",
+        "  Resolveu -> a próxima parte volta ao implementer. Nunca peça ao usuário para trocar /model ou /effort.",
+        "- Assunto novo sem relação -> sugira /clear. Conversa longa num intervalo -> sugira /compact com nota.",
+    ]
+    overrides = []
+    for agent, wanted in AGENT_MODELS.items():
+        got = model_for(agent, models)
+        if got and got != wanted:
+            overrides.append(f"{agent} -> model: \"{got}\"")
+    if overrides:
+        lines.append("- Modelos fora do plano: ao chamar estes agentes, passe o parâmetro model: "
+                     + "; ".join(overrides) + ".")
+    lines.append("- Se um subagente falhar porque o modelo não está disponível, trate esse modelo como "
+                 "indisponível pelo resto da sessão e passe model com o substituto (Haiku -> Sonnet, "
+                 "Sonnet -> Opus, Opus -> Sonnet). Se for o Fable, encerre a escada e peça ajuda ao usuário.")
+    return "\n".join(lines)
 
 # O que o Claude deve fazer para cada dica (o usuário vê só a dica curta).
 ACTIONS = {
     "big_task": "Siga a skill big-task agora para esta tarefa, sem esperar /big-task.",
     "boost": "Delegue a próxima tentativa ao subagente implementer-high, passando o que já falhou.",
     "escalate": "Delegue a próxima tentativa ao subagente implementer-fable, passando o que já falhou.",
+    "stuck": "Não delegue a outro nível: pare, resuma as tentativas e o que falhou, e peça ajuda ao usuário.",
 }
 
 
@@ -99,7 +228,7 @@ def matches(patterns, text):
 
 
 def state_path(session_id):
-    base = Path(os.environ.get("TOKEN_PILOT_STATE_DIR", Path.home() / ".claude" / "token-pilot"))
+    base = base_dir()
     base.mkdir(parents=True, exist_ok=True)
     safe = re.sub(r"[^A-Za-z0-9_.-]", "_", session_id or "default")
     return base / f"{safe}.json"
@@ -119,7 +248,7 @@ def transcript_mb(transcript_path):
         return 0.0
 
 
-def decide(state, prompt, transcript_path):
+def decide(state, prompt, transcript_path, models=ALL_MODELS):
     """Atualiza o estado e devolve (chave_da_dica, texto) ou (None, None)."""
     state["prompts"] += 1
     state["since_compact"] += 1
@@ -150,16 +279,22 @@ def decide(state, prompt, transcript_path):
         state["stalls"] += 1
         if state["stalls"] >= STALLS_TO_ESCALATE and state["level"] < 3:
             state["level"] = 3
+            if model_for("implementer-fable", models) is None:
+                return "stuck", (
+                    f"{state['stalls']} falhas seguidas no mesmo problema, já no high. Seu plano não "
+                    "tem Fable, então o Claude vai parar, resumir o que falhou e pedir sua ajuda."
+                )
             return "escalate", (
                 f"{state['stalls']} falhas seguidas no mesmo problema, já no high. "
-                "A próxima tentativa vai para o subagente implementer-fable (Fable 5.1), "
-                "com o histórico das falhas."
+                "A próxima tentativa vai para o subagente implementer-fable "
+                f"({MODEL_NAMES[model_for('implementer-fable', models)]}), com o histórico das falhas."
             )
         if state["stalls"] >= STALLS_TO_BOOST and state["level"] < 2:
             state["level"] = 2
+            high = model_for("implementer-high", models) or "opus"
             return "boost", (
                 f"{state['stalls']} falhas seguidas no mesmo problema no medium. "
-                "A próxima tentativa vai para o subagente implementer-high (Opus 5.5, high), "
+                f"A próxima tentativa vai para o subagente implementer-high ({MODEL_NAMES[high]}, high), "
                 "com o histórico das falhas."
             )
         return None, None
@@ -190,16 +325,29 @@ def main():
     except ValueError:
         return 0
 
+    models, source = resolve_models()
+
     if data.get("hook_event_name") == "SessionStart":
-        print(json.dumps({"hookSpecificOutput": {
-            "hookEventName": "SessionStart", "additionalContext": SESSION_RULES}}, ensure_ascii=False))
+        out = {"hookSpecificOutput": {"hookEventName": "SessionStart",
+                                      "additionalContext": session_rules(models, source)}}
+        notice = base_dir() / ".plan-notice"
+        if source.startswith("desconhecido") and not notice.exists():
+            out["systemMessage"] = ("💡 Token Pilot: não sei qual é o seu plano. Rode "
+                                    "`python3 .claude/hooks/token_pilot.py --plan pro` (ou max, team, "
+                                    "enterprise, api) para usar só os modelos que você tem.")
+            try:
+                base_dir().mkdir(parents=True, exist_ok=True)
+                notice.touch()
+            except OSError:
+                pass
+        print(json.dumps(out, ensure_ascii=False))
         return 0
 
     prompt = data.get("prompt") or ""
     path = state_path(data.get("session_id", ""))
     state = load_state(path)
 
-    key, hint = decide(state, prompt, data.get("transcript_path"))
+    key, hint = decide(state, prompt, data.get("transcript_path"), models)
     if key and key == state.get("last_hint") and key not in ("compact",):
         key, hint = None, None  # não repete a mesma dica
     if key:
@@ -227,7 +375,30 @@ def main():
     return 0
 
 
+def cli(args):
+    """python3 token_pilot.py --plan pro | --models haiku,sonnet,opus | --show"""
+    path = base_dir() / "config.json"
+    config = read_json(path)
+    if args[0] == "--plan" and len(args) > 1 and args[1].lower() in PLAN_MODELS:
+        config = {"plan": args[1].lower()}
+    elif args[0] == "--models" and len(args) > 1 and parse_models(args[1]):
+        config = {"models": parse_models(args[1])}
+    elif args[0] != "--show":
+        print("Uso: token_pilot.py --plan <" + "|".join(PLAN_MODELS) + "> | --models haiku,sonnet,opus | --show")
+        return 2
+    if args[0] != "--show":
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(config))
+    models, source = resolve_models()
+    print(f"Modelos: {', '.join(MODEL_NAMES[m] for m in models)} (fonte: {source})")
+    fable = model_for("implementer-fable", models)
+    print("Escada: implementer -> implementer-high" + (" -> implementer-fable" if fable else " (sem Fable: para e pede ajuda)"))
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        sys.exit(cli(sys.argv[1:]))
     try:
         sys.exit(main())
     except Exception:  # o hook nunca pode travar a sessão

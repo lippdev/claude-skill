@@ -68,6 +68,40 @@ decisão, plano, falhas, comando de verificação).
 O effort de um subagente só pode ser definido no arquivo dele, por isso há um agente por
 nível de execução.
 
+## Plano do usuário
+
+Nem todo plano tem todos os modelos. O Pro, por exemplo, não tem Fable. O Claude Code não
+grava o tipo de assinatura em nenhum arquivo local que o hook possa ler, então o plano vem,
+nesta ordem, de:
+
+1. `TOKEN_PILOT_MODELS` (lista explícita, ex.: `haiku,sonnet,opus`);
+2. `~/.claude/token-pilot/config.json`, gravado pelo comando abaixo;
+3. `TOKEN_PILOT_PLAN` (`pro`, `max`, `team`, `enterprise` ou `api`);
+4. detecção automática nos arquivos locais do Claude Code, sem garantia de funcionar;
+5. sem nada disso, o hook assume todos os modelos e avisa uma vez para você informar o plano.
+
+O `availableModels` das configurações do Claude Code, quando existe, sempre restringe a lista.
+
+Informe o plano uma vez:
+
+```bash
+python3 .claude/hooks/token_pilot.py --plan pro     # ou max, team, enterprise, api
+python3 .claude/hooks/token_pilot.py --models haiku,sonnet,opus   # lista exata
+python3 .claude/hooks/token_pilot.py --show         # ver o que está valendo
+```
+
+Com o plano conhecido:
+
+- **Sem Fable:** a escada termina no `implementer-high`. Depois de 2 falhas nele, o Claude
+  para, resume o que foi tentado e pede sua ajuda. `/escalate` não funciona.
+- **Sem algum outro modelo:** o agente é chamado com um substituto (Haiku → Sonnet,
+  Sonnet → Opus, Opus → Sonnet).
+- **Rede de segurança:** se um subagente falhar porque o modelo não está disponível, o
+  Claude passa a tratar esse modelo como indisponível pelo resto da sessão.
+
+A tabela de modelos por plano fica em `PLAN_MODELS`, no começo do hook. Ajuste se o seu
+plano for diferente.
+
 ## O hook
 
 No início da sessão, `token_pilot.py` injeta as regras de delegação. A cada prompt, atualiza um estado por sessão em `~/.claude/token-pilot/`:
@@ -97,7 +131,8 @@ o app como servidor MCP (ou CLI) com "ler contexto" e "gravar contexto" e defina
 
 **Num projeto:** copie a pasta `.claude/` para a raiz do projeto e adicione `.token-pilot/`
 ao `.gitignore`. Se o projeto já tiver `.claude/settings.json`, junte a seção `hooks` em
-vez de sobrescrever. Abra uma sessão nova: agentes e skills são carregados no início.
+vez de sobrescrever. Informe seu plano com `python3 .claude/hooks/token_pilot.py --plan <plano>`.
+Abra uma sessão nova: agentes e skills são carregados no início.
 
 **Em todos os projetos:** copie `skills/` e `agents/` para `~/.claude/`, o hook para
 `~/.claude/hooks/token_pilot.py`, e registre-o em `~/.claude/settings.json` com
