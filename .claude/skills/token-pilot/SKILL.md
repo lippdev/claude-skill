@@ -58,8 +58,10 @@ comportamento errado):
 2. Segunda falha no `medium`: **delegue automaticamente** a correção ao `implementer-high`,
    passando o que já foi tentado. A sessão principal não troca de effort, então o cache
    dela não é refeito. (`/boost` é a alternativa manual.)
-3. Duas falhas no `implementer-high`: delegue ao `implementer-fable`. (`/escalate` é a
-   alternativa manual.)
+3. Duas falhas no `implementer-high`: delegue ao `implementer-fable`, se o plano do usuário
+   tiver Fable (veja a linha `Modelos do plano do usuário` que o hook injeta). Sem Fable,
+   pare, resuma o que falhou e peça ajuda. (`/escalate` é a alternativa manual e também
+   exige Fable.)
 4. Resolvido: a próxima parte volta a começar no nível padrão. Não há nada para desligar.
    Só se o usuário tiver trocado manualmente (`/model`, `/effort`), lembre-o de voltar
    com `/model opus` e `/effort medium`.

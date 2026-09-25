@@ -13,8 +13,11 @@ HOOK = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "token_pil
 
 
 class HookSession:
-    def __init__(self, state_dir, session="teste"):
-        self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir)
+    def __init__(self, state_dir, session="teste", **env):
+        self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir, HOME=state_dir, **env)
+        for key in ("TOKEN_PILOT_MODELS", "TOKEN_PILOT_PLAN"):
+            if key not in env:
+                self.env.pop(key, None)
         self.session = session
 
     def run(self, data):
@@ -97,6 +100,66 @@ class TestHook(unittest.TestCase):
 
     def test_entrada_invalida_nao_trava(self):
         self.assertIsNone(self.s.send("", raw="{quebrado"))
+
+
+class TestPlano(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def regras(self, **env):
+        s = HookSession(self.tmp.name, **env)
+        out = s.run(json.dumps({"hook_event_name": "SessionStart", "session_id": "p"}))
+        return out, out["hookSpecificOutput"]["additionalContext"]
+
+    def escada(self, **env):
+        s = HookSession(self.tmp.name, **env)
+        return [s.send(m) for m in ("mesmo erro",) * 4]
+
+    def test_pro_sem_fable_para_e_pede_ajuda(self):
+        _, ctx = self.regras(TOKEN_PILOT_PLAN="pro")
+        self.assertIn("plano pro", ctx)
+        self.assertNotIn("Fable 5.1 (", ctx)
+        self.assertIn("peça ajuda ao usuário (o plano não tem Fable", ctx)
+        msgs = self.escada(TOKEN_PILOT_PLAN="pro")
+        self.assertIn("implementer-high", msgs[1])
+        self.assertIn("não tem Fable", msgs[3])
+        self.assertNotIn("implementer-fable", msgs[3])
+
+    def test_max_usa_fable(self):
+        _, ctx = self.regras(TOKEN_PILOT_PLAN="max")
+        self.assertIn("-> implementer-fable", ctx)
+        self.assertIn("implementer-fable", self.escada(TOKEN_PILOT_PLAN="max")[3])
+
+    def test_sem_opus_troca_modelo_dos_agentes(self):
+        _, ctx = self.regras(TOKEN_PILOT_MODELS="haiku,sonnet")
+        self.assertIn('implementer -> model: "sonnet"', ctx)
+        self.assertIn("Sonnet, high", self.escada(TOKEN_PILOT_MODELS="haiku,sonnet")[1])
+
+    def test_plano_desconhecido_avisa_uma_vez(self):
+        out, _ = self.regras()
+        self.assertIn("--plan", out["systemMessage"])
+        out, _ = self.regras()
+        self.assertNotIn("systemMessage", out)
+
+    def test_cli_grava_plano(self):
+        env = dict(os.environ, TOKEN_PILOT_STATE_DIR=self.tmp.name, HOME=self.tmp.name)
+        env.pop("TOKEN_PILOT_PLAN", None); env.pop("TOKEN_PILOT_MODELS", None)
+        out = subprocess.run([sys.executable, str(HOOK), "--plan", "pro"], capture_output=True,
+                             text=True, env=env, check=True).stdout
+        self.assertIn("sem Fable", out)
+        _, ctx = self.regras()
+        self.assertIn("plano pro (config.json)", ctx)
+
+    def test_available_models_restringe(self):
+        proj = Path(self.tmp.name) / "proj" / ".claude"
+        proj.mkdir(parents=True)
+        (proj / "settings.json").write_text(json.dumps({"availableModels": ["sonnet", "claude-opus-5-5"]}))
+        _, ctx = self.regras(TOKEN_PILOT_PLAN="max", CLAUDE_PROJECT_DIR=str(proj.parent))
+        self.assertIn("Sonnet, Opus 5.5 (fonte: plano max (TOKEN_PILOT_PLAN) + availableModels)", ctx)
+        self.assertIn('scout -> model: "sonnet"', ctx)
 
 
 if __name__ == "__main__":

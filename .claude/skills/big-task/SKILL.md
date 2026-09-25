@@ -31,6 +31,18 @@ O effort vem do arquivo do agente, então escolha o agente pela combinação que
 | `implementer-high` | Opus 5.5 | high | parte que falhou 2× no implementer |
 | `implementer-fable` | Fable 5.1 | high | parte que falhou 2× no implementer-high |
 
+### Plano do usuário
+
+Nem todo plano tem todos os modelos (o Pro não tem Fable, por exemplo). O hook informa no
+início da sessão a linha `Modelos do plano do usuário` e, se preciso, quais agentes devem
+ser chamados com o parâmetro `model` trocado. Siga essa linha:
+
+- Agente cujo modelo não está no plano → chame-o passando o `model` substituto indicado.
+- Sem Fable → a escada termina no `implementer-high`. Depois de 2 falhas nele, pare,
+  resuma o que foi tentado e peça ajuda ao usuário.
+- Um subagente falhou porque o modelo não está disponível → trate esse modelo como
+  indisponível pelo resto da sessão e aplique a mesma regra.
+
 Regra de escolha para cada parte:
 
 - **Só achar coisas** → `scout`. **Entender como coisas se ligam** → `researcher`.
@@ -90,7 +102,8 @@ execução com um único `implementer`.
       os testes passando).
    3. Se falhar, registre em Falhas e aplique a escada:
       - 2 falhas no `implementer` → `implementer-high`
-      - 2 falhas no `implementer-high` → `implementer-fable`
+      - 2 falhas no `implementer-high` → `implementer-fable` (só se o plano tiver Fable;
+        sem Fable, pare aqui e explique ao usuário o que falta)
       - 2 falhas no `implementer-fable` → pare e explique ao usuário o que falta.
    4. Voltou OK depois de subir? A próxima parte começa de novo no `implementer`.
 3. Partes que não tocam os mesmos arquivos podem rodar em paralelo com
