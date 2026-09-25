@@ -1,0 +1,6 @@
+[
+  {"sku": "CAF-001", "nome": "Café em grãos 1kg", "preco": 64.9, "minimo": 5},
+  {"sku": "CAF-002", "nome": "Café moído 500g", "preco": 24.9, "minimo": 10},
+  {"sku": "CAN-001", "nome": "Caneca de cerâmica", "preco": 39.0, "minimo": 4},
+  {"sku": "FIL-001", "nome": "Filtro de papel 103", "preco": 7.5, "minimo": 20}
+]

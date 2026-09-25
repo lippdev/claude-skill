@@ -271,7 +271,7 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS):
 
     if matches(NEW_TASK_PATTERNS, prompt):
         state["stalls"] = 0
-        if state["since_compact"] > 5:
+        if state["since_compact"] >= 3:
             return "new_task", "Assunto novo. Use /clear para não carregar o contexto antigo."
         return None, None
 

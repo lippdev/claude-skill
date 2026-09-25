@@ -1,0 +1,9 @@
+[
+  {"sku": "CAF-001", "tipo": "entrada", "quantidade": 10, "data": "15/02/2026"},
+  {"sku": "CAF-001", "tipo": "saida", "quantidade": 5, "data": "20/02/2026"},
+  {"sku": "CAF-002", "tipo": "entrada", "quantidade": 30, "data": "10/02/2026"},
+  {"sku": "CAF-002", "tipo": "saida", "quantidade": 12, "data": "01/03/2026"},
+  {"sku": "CAN-001", "tipo": "entrada", "quantidade": 6, "data": "05/02/2026"},
+  {"sku": "FIL-001", "tipo": "entrada", "quantidade": 50, "data": "12/02/2026"},
+  {"sku": "FIL-001", "tipo": "saida", "quantidade": 35, "data": "02/03/2026"}
+]
