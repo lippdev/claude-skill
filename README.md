@@ -152,3 +152,13 @@ python3 tests/test_hook.py          # simula uma sessão contra o hook
 
 Com o Claude, no projeto de demonstração: siga
 [`examples/demo-loja/CENARIO.md`](examples/demo-loja/CENARIO.md).
+
+Teste completo, com os agentes rodando de verdade num projeto fictício de estoque, e um
+relatório de quais agentes rodaram, em qual modelo e com quantos tokens: siga
+[`examples/estoque/PLANO-DE-TESTE.md`](examples/estoque/PLANO-DE-TESTE.md). O relatório vem de
+
+```bash
+python3 tests/session_report.py --dir <pasta do projeto> --last 3
+```
+
+que lê os registros locais do Claude Code sem mostrar o conteúdo das respostas.
