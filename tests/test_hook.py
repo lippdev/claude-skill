@@ -131,12 +131,20 @@ class TestPlano(unittest.TestCase):
     def test_max_usa_fable(self):
         _, ctx = self.regras(TOKEN_PILOT_PLAN="max")
         self.assertIn("-> implementer-fable", ctx)
+        self.assertIn("Sonnet 5.5", ctx)
         self.assertIn("implementer-fable", self.escada(TOKEN_PILOT_PLAN="max")[3])
+
+    def test_sonnet_55_no_plano_pro_e_id_explicito(self):
+        _, ctx = self.regras(TOKEN_PILOT_PLAN="pro")
+        self.assertIn("Haiku, Sonnet 5.5, Opus 5.5", ctx)
+        self.assertIn("researcher (Sonnet 5.5, medium)", ctx)
+        _, ctx = self.regras(TOKEN_PILOT_MODELS="claude-sonnet-5-5,claude-opus-5-5")
+        self.assertIn("Sonnet 5.5, Opus 5.5", ctx)
 
     def test_sem_opus_troca_modelo_dos_agentes(self):
         _, ctx = self.regras(TOKEN_PILOT_MODELS="haiku,sonnet")
         self.assertIn('implementer -> model: "sonnet"', ctx)
-        self.assertIn("Sonnet, high", self.escada(TOKEN_PILOT_MODELS="haiku,sonnet")[1])
+        self.assertIn("Sonnet 5.5, high", self.escada(TOKEN_PILOT_MODELS="haiku,sonnet")[1])
 
     def test_plano_desconhecido_avisa_uma_vez(self):
         out, _ = self.regras()
@@ -158,7 +166,7 @@ class TestPlano(unittest.TestCase):
         proj.mkdir(parents=True)
         (proj / "settings.json").write_text(json.dumps({"availableModels": ["sonnet", "claude-opus-5-5"]}))
         _, ctx = self.regras(TOKEN_PILOT_PLAN="max", CLAUDE_PROJECT_DIR=str(proj.parent))
-        self.assertIn("Sonnet, Opus 5.5 (fonte: plano max (TOKEN_PILOT_PLAN) + availableModels)", ctx)
+        self.assertIn("Sonnet 5.5, Opus 5.5 (fonte: plano max (TOKEN_PILOT_PLAN) + availableModels)", ctx)
         self.assertIn('scout -> model: "sonnet"', ctx)
 
 

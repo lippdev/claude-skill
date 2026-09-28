@@ -76,7 +76,7 @@ PLAN_MODELS = {
     "enterprise": ALL_MODELS,
     "api": ALL_MODELS,
 }
-MODEL_NAMES = {"haiku": "Haiku", "sonnet": "Sonnet", "opus": "Opus 5.5", "fable": "Fable 5.1"}
+MODEL_NAMES = {"haiku": "Haiku", "sonnet": "Sonnet 5.5", "opus": "Opus 5.5", "fable": "Fable 5.1"}
 # Modelo de cada agente e para onde ele vai quando esse modelo não existe no plano.
 AGENT_MODELS = {
     "scout": "haiku", "log-reader": "haiku", "verifier": "haiku", "researcher": "sonnet",
@@ -185,7 +185,7 @@ def session_rules(models, source):
         "[Token Pilot] Regras desta sessão (aplique sem esperar comando do usuário):",
         f"- Modelos do plano do usuário: {names} (fonte: {source}).",
         "- Busca/localização de código -> subagente scout. Logs/CI -> log-reader.",
-        "  Rodar testes -> verifier. Entender um fluxo em vários arquivos -> researcher.",
+        "  Rodar testes -> verifier. Entender um fluxo em vários arquivos -> researcher (Sonnet 5.5, medium).",
         "- Tarefa grande (analisar + decidir + implementar, ou vários arquivos) -> siga a skill",
         "  big-task automaticamente: análise com scouts em paralelo, brainstorm no ideator,",
         "  execução no implementer, verificação no verifier.",
@@ -203,8 +203,8 @@ def session_rules(models, source):
         lines.append("- Modelos fora do plano: ao chamar estes agentes, passe o parâmetro model: "
                      + "; ".join(overrides) + ".")
     lines.append("- Se um subagente falhar porque o modelo não está disponível, trate esse modelo como "
-                 "indisponível pelo resto da sessão e passe model com o substituto (Haiku -> Sonnet, "
-                 "Sonnet -> Opus, Opus -> Sonnet). Se for o Fable, encerre a escada e peça ajuda ao usuário.")
+                  "indisponível pelo resto da sessão e passe model com o substituto (Haiku -> Sonnet 5.5, "
+                  "Sonnet 5.5 -> Opus, Opus -> Sonnet 5.5). Se for o Fable, encerre a escada e peça ajuda ao usuário.")
     return "\n".join(lines)
 
 # O que o Claude deve fazer para cada dica (o usuário vê só a dica curta).
@@ -302,7 +302,7 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS):
     if is_big_task(prompt) and state["prompts"] - state.get("big_task_at", -99) > 5:
         state["big_task_at"] = state["prompts"]
         return "big_task", (
-            "Tarefa grande detectada. O Claude vai dividir em análise (Haiku/Sonnet), "
+            "Tarefa grande detectada. O Claude vai dividir em análise (Haiku/Sonnet 5.5), "
             "brainstorm (Opus high) e execução (Opus medium, subindo se travar)."
         )
 
