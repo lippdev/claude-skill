@@ -1,6 +1,6 @@
 ---
 name: big-task
-description: Coordena uma tarefa grande dividindo-a em análise, brainstorm e execução, e manda cada parte para um subagente com o modelo e o effort adequados (Haiku, Sonnet, Opus 5.5 ou Fable 5.1). Use quando o usuário pedir uma tarefa que exige entender o código, decidir o que fazer e depois implementar, ou quando ele digitar /big-task.
+description: Coordena uma tarefa grande dividindo-a em análise, brainstorm e execução, e manda cada parte para um subagente com o modelo e o effort adequados (Haiku, Sonnet 5.5, Opus 5.5 ou Fable 5.1). Use quando o usuário pedir uma tarefa que exige entender o código, decidir o que fazer e depois implementar, ou quando ele digitar /big-task.
 argument-hint: "<tarefa> [--auto]"
 ---
 
@@ -25,7 +25,7 @@ O effort vem do arquivo do agente, então escolha o agente pela combinação que
 | `scout` | Haiku | low | localizar arquivos, símbolos, usos |
 | `log-reader` | Haiku | low | resumir logs, CI, stack traces |
 | `verifier` | Haiku | low | rodar testes/build/lint e resumir |
-| `researcher` | Sonnet | medium | entender um fluxo lendo vários arquivos |
+| `researcher` | Sonnet 5.5 | medium | entender um fluxo lendo vários arquivos |
 | `ideator` | Opus 5.5 | high | brainstorm e comparação de opções |
 | `implementer` | Opus 5.5 | medium | editar código (nível padrão) |
 | `implementer-high` | Opus 5.5 | high | parte que falhou 2× no implementer |

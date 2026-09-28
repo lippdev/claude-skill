@@ -2,13 +2,15 @@
 
 Baseada no guia "Making Opus 5.5 your daily driver". Opus 5.5 custa 20% menos por
 token que o Opus 5 e 60% menos em leituras de cache, então a regra geral é: fique no
-Opus 5.5 com effort `medium` e só saia disso com motivo.
+Opus 5.5 com effort `medium` e só saia disso com motivo. Sonnet 5.5 custa menos
+($2/$10 por milhão de tokens de entrada/saída contra $4/$20 do Opus 5.5):
+use-o para pesquisa e leitura de vários arquivos, sem delegar edição a ele.
 
 ## Níveis
 
 | Nível | Modelo | Effort | Quando | Como entrar | Como sair |
 |---|---|---|---|---|---|
-| 0 – Leve | Haiku / Sonnet (subagente) | `low`/`medium` | Busca, logs, testes, pesquisa | `scout`, `log-reader`, `verifier`, `researcher` | termina sozinho |
+| 0 – Leve | Haiku / Sonnet 5.5 (subagente) | `low`/`medium` | Busca, logs, testes, pesquisa | `scout`, `log-reader`, `verifier`, `researcher` | termina sozinho |
 | 1 – Padrão | Opus 5.5 | `medium` | Trabalho diário bem delimitado | `/model opus` + `/effort medium` | — |
 | 2 – Reforço | Opus 5.5 | `high` | 2 falhas no mesmo problema no nível 1 | subagente `implementer-high` (manual: `/boost`) | automático ao terminar |
 | 3 – Escalada | Fable 5.1 | `high` | 2 falhas no mesmo problema no nível 2 | subagente `implementer-fable` (manual: `/escalate`) | automático ao terminar |

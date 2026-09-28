@@ -21,7 +21,7 @@ A política completa (tabela de decisão, sinais e mensagens prontas) está em
   - `scout` (Haiku, low): localizar arquivos, símbolos, grep amplo.
   - `log-reader` (Haiku, low): ler e resumir logs, saídas de CI, stack traces.
   - `verifier` (Haiku, low): rodar testes/build/lint e resumir.
-  - `researcher` (Sonnet, medium): pesquisa que exige ler e comparar vários arquivos.
+   - `researcher` (Sonnet 5.5, medium): pesquisa que exige ler e comparar vários arquivos.
   - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
   - `implementer` → `implementer-high` → `implementer-fable`: edição, subindo de nível
     a cada 2 falhas na mesma parte. Nunca delegue edições para Haiku ou Sonnet.
@@ -41,7 +41,7 @@ Classifique a tarefa e recomende o ponto de partida:
 |---|---|---|---|
 | Bem delimitada, 1–2 arquivos, rotina do dia a dia | Opus 5.5 | `medium` | — |
 | Mexe em vários arquivos | Opus 5.5 | `medium` | sugerir `plan mode` (Shift+Tab) |
-| Pergunta rápida, formatação, renomear | Opus 5.5 ou Sonnet | `low` | — |
+| Pergunta rápida, formatação, renomear | Opus 5.5 ou Sonnet 5.5 | `low` | — |
 | Só busca/leitura | subagente `scout` / `log-reader` | `low` | — |
 
 Sempre garanta uma forma de verificar o trabalho (teste, build, lint, script de
@@ -73,7 +73,7 @@ hook usa heurística de palavras e pode errar).
 ### 3. Durante a sessão
 
 - Busca e leitura de logs → subagentes `scout`/`log-reader` (Haiku) ou `researcher`
-  (Sonnet). Traga só a conclusão para a sessão principal.
+  (Sonnet 5.5). Traga só a conclusão para a sessão principal.
 - Tarefa nova sem relação com a anterior → sugira `/clear`.
 - Conversa longa, num intervalo natural → sugira `/compact` **com uma nota do que manter**,
   e escreva a nota para o usuário copiar, por exemplo:
