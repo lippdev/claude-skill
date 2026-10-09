@@ -195,6 +195,7 @@ def session_rules(models, source):
         f"- Mesma parte falhou 2x -> delegue ao implementer-high; {ladder}",
         "  Resolveu -> volte a editar na sessão principal. Nunca peça ao usuário para trocar /model ou /effort.",
         "- Assunto novo sem relação -> sugira /clear. Conversa longa num intervalo -> sugira /compact com nota.",
+        "- Instalado como plugin, os agentes têm prefixo (token-pilot:scout); use o nome completo ao chamá-los.",
     ]
     overrides = []
     for agent, wanted in AGENT_MODELS.items():
@@ -464,7 +465,7 @@ def main():
         notice = base_dir() / ".plan-notice"
         if source.startswith("desconhecido") and not notice.exists():
             out["systemMessage"] = ("💡 Token Pilot: não sei qual é o seu plano. Rode "
-                                    "`python3 .claude/hooks/token_pilot.py --plan pro` (ou max, team, "
+                                    f"`python3 \"{Path(__file__).resolve()}\" --plan pro` (ou max, team, "
                                     "enterprise, api) para usar só os modelos que você tem.")
             try:
                 base_dir().mkdir(parents=True, exist_ok=True)

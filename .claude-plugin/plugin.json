@@ -1,0 +1,30 @@
+{
+  "name": "token-pilot",
+  "version": "1.0.0",
+  "description": "Delega leitura, logs e testes a Haiku 5.5 e Sonnet 5.5, edita no Opus 5.5 com uma disciplina de resposta enxuta e escala o effort sozinho quando trava.",
+  "author": {
+    "name": "lippdev"
+  },
+  "repository": "https://github.com/lippdev/claude-skill",
+  "license": "MIT",
+  "keywords": [
+    "tokens",
+    "custo",
+    "subagentes",
+    "haiku",
+    "opus"
+  ],
+  "skills": [
+    "./.claude/skills"
+  ],
+  "agents": [
+    "./.claude/agents/ideator.md",
+    "./.claude/agents/implementer-fable.md",
+    "./.claude/agents/implementer-high.md",
+    "./.claude/agents/implementer.md",
+    "./.claude/agents/log-reader.md",
+    "./.claude/agents/researcher.md",
+    "./.claude/agents/scout.md",
+    "./.claude/agents/verifier.md"
+  ]
+}

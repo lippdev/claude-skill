@@ -21,6 +21,20 @@ Tudo roda sozinho, sem comandos:
 
 Os comandos `/big-task`, `/boost` e `/escalate` continuam existindo para forçar o fluxo.
 
+### Disciplina de resposta e mapa do código
+
+- **Disciplina de resposta** (`.claude/hooks/disciplina.md`): a menor mudança que resolve a
+  tarefa inteira, ler antes de editar, sem código "para depois", e uma resposta curta que diz
+  o que ficou de fora. No Opus 5.5, o que o modelo escreve é o custo principal, e é aí que
+  ela economiza. Nunca corta validação, tratamento de erro, segurança, acessibilidade nem o
+  que foi pedido. Vai para a sessão principal e, pelo hook `SubagentStart`, para cada
+  subagente; os agentes de leitura recebem uma versão mais curta.
+- **Mapa do código:** até 2 mil caracteres com as funções, classes e exports de cada pasta,
+  gerado sem modelo em até 2 s. Ajuda a reutilizar o que existe e evita releituras.
+  Desligue com `TOKEN_PILOT_MAP=0` ou ajuste o teto com `TOKEN_PILOT_MAP_CHARS`.
+- Ambas foram inspiradas no [ponytail](https://github.com/dietrichgebert/ponytail) (MIT),
+  com texto e código próprios.
+
 O Claude não consegue trocar o modelo da sessão principal sozinho, mas consegue escolher
 o modelo de cada **subagente**. Então a sessão principal vira uma coordenadora que nunca
 troca de modelo (o cache dela não é refeito) e manda cada parte para o agente certo:
@@ -143,15 +157,35 @@ o app como servidor MCP (ou CLI) com "ler contexto" e "gravar contexto" e defina
 
 ## Instalação
 
-**Num projeto:** copie a pasta `.claude/` para a raiz do projeto e adicione `.token-pilot/`
-ao `.gitignore`. Se o projeto já tiver `.claude/settings.json`, junte a seção `hooks` em
-vez de sobrescrever. Informe seu plano com `python3 .claude/hooks/token_pilot.py --plan <plano>`.
-Abra uma sessão nova: agentes e skills são carregados no início.
+**Como plugin (recomendado):** dentro do Claude Code,
 
-**Em todos os projetos:** copie `skills/` e `agents/` para `~/.claude/`, o hook para
-`~/.claude/hooks/token_pilot.py`, e registre-o em `~/.claude/settings.json` com
-`"command": "python3 ~/.claude/hooks/token_pilot.py"` nos eventos `SessionStart` e
-`UserPromptSubmit`.
+```
+/plugin marketplace add lippdev/claude-skill
+/plugin install token-pilot@token-pilot
+```
+
+ou, no Claude Code 2.1.275 ou mais novo, numa linha só:
+
+```
+/plugin install token-pilot --marketplace lippdev/claude-skill
+```
+
+Depois, informe seu plano uma vez (o aviso do primeiro início mostra o caminho exato do script):
+
+```bash
+python3 ~/.claude/plugins/<...>/token-pilot/.claude/hooks/token_pilot.py --plan pro
+```
+
+ou defina `TOKEN_PILOT_PLAN=pro` no ambiente. Como plugin, os agentes aparecem com o prefixo
+`token-pilot:` (por exemplo, `token-pilot:scout`). O plugin não muda o modelo nem o effort da
+sessão: deixe a sessão principal no Opus 5.5 `medium` (`/model opus` e `/effort medium`, ou
+`"model": "opus"` e `"effortLevel": "medium"` no seu `settings.json`).
+
+**Copiando a pasta, num projeto:** copie `.claude/` para a raiz do projeto e adicione
+`.token-pilot/` ao `.gitignore`. Se o projeto já tiver `.claude/settings.json`, junte a seção
+`hooks` em vez de sobrescrever. Abra uma sessão nova: agentes e skills são carregados no início.
+
+**Testar sem instalar:** `claude --plugin-dir <pasta deste repositório>`.
 
 Requer Python 3.
 
