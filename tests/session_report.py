@@ -71,10 +71,21 @@ def ts(value):
 
 
 def short_model(model):
+    """Família e versão do modelo: "claude-haiku-5-5" vira "haiku 5.5"."""
+    m = re.search(r"(haiku|sonnet|opus|fable)-(\d+)-(\d+)(?!\d)", model or "")
+    if m:
+        return f"{m.group(1)} {m.group(2)}.{m.group(3)}"
+    m = re.search(r"(haiku|sonnet|opus|fable)-(\d+)(?![\d-])", model or "")
+    if m:
+        return f"{m.group(1)} {m.group(2)}"
     for name in ("haiku", "sonnet", "opus", "fable"):
         if name in (model or ""):
             return name
     return model or "?"
+
+
+def family(model):
+    return short_model(model).split(" ")[0]
 
 
 def add_usage(bucket, usage):
@@ -185,9 +196,9 @@ def report_session(session_file, expected):
         exp_model, exp_eff = expected.get(kind, ("", ""))
         exp_model = meta.get("model") or exp_model
         real = ", ".join(u) or "—"
-        ok = "" if not exp_model or exp_model == "inherit" or short_model(exp_model) in u else " ⚠️"
+        ok = "" if not exp_model or exp_model == "inherit" or family(exp_model) in {family(k) for k in u} else " ⚠️"
         tok = " + ".join(f"{b['in']:,}/{b['out']:,}/{b['cache_r']:,}".replace(",", ".") for b in u.values()) or "—"
-        exp = f"{short_model(exp_model)}/{exp_eff or '—'}" if exp_model else "—"
+        exp = f"{family(exp_model)}/{exp_eff or '—'}" if exp_model else "—"
         lines.append(f"| {i} | {kind} | {(meta.get('description') or '')[:40]} | {real}{ok} | {exp} "
                      f"| {', '.join(sorted(eff)) or '—'} | {tok} | {dur:.0f}s | {err} |")
 

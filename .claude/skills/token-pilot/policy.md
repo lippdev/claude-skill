@@ -10,7 +10,7 @@ use-o para pesquisa e leitura de vários arquivos, sem delegar edição a ele.
 
 | Nível | Modelo | Effort | Quando | Como entrar | Como sair |
 |---|---|---|---|---|---|
-| 0 – Leve | Haiku / Sonnet 5.5 (subagente) | `low`/`medium` | Busca, logs, testes, pesquisa | `scout`, `log-reader`, `verifier`, `researcher` | termina sozinho |
+| 0 – Leve | Haiku 5.5 / Sonnet 5.5 (subagente) | `low`/`medium` | Busca, logs, testes, pesquisa | `scout`, `log-reader`, `verifier`, `researcher` | termina sozinho |
 | 1 – Padrão | Opus 5.5 | `medium` | Trabalho diário bem delimitado | `/model opus` + `/effort medium` | — |
 | 2 – Reforço | Opus 5.5 | `high` | 2 falhas no mesmo problema no nível 1 | subagente `implementer-high` (manual: `/boost`) | automático ao terminar |
 | 3 – Escalada | Fable 5.1 | `high` | 2 falhas no mesmo problema no nível 2 | subagente `implementer-fable` (manual: `/escalate`) | automático ao terminar |

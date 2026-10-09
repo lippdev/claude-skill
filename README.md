@@ -6,7 +6,7 @@ daily driver":
 
 1. **Antes de começar:** Opus 5.5 com effort `medium`. Plan mode para mudanças em vários arquivos.
 2. **Quando travar:** `medium` → `high`; se o `high` travar duas vezes → Fable 5.1. Volta ao padrão quando resolver.
-3. **Durante a sessão:** busca e logs no Haiku, pesquisa em vários arquivos no Sonnet 5.5, edição no Opus 5.5. `/clear` entre tarefas, `/compact` com nota.
+3. **Durante a sessão:** busca e logs no Haiku 5.5, pesquisa em vários arquivos no Sonnet 5.5, edição no Opus 5.5. `/clear` entre tarefas, `/compact` com nota.
 4. **Meça:** compare o `/usage` de cada modelo numa tarefa real.
 
 ## Como funciona
@@ -28,12 +28,12 @@ troca de modelo (o cache dela não é refeito) e manda cada parte para o agente 
 ```
 /big-task <tarefa>          (sessão principal: Opus 5.5, medium, contexto pequeno)
 │
-├─ Análise     scout ×N (Haiku, low) em paralelo + researcher (Sonnet 5.5, medium)
+├─ Análise     scout ×N (Haiku 5.5, low) em paralelo + researcher (Sonnet 5.5, medium)
 ├─ Brainstorm  ideator (Opus 5.5, high), recebe só o resumo      ⏸ você escolhe
 ├─ Execução    implementer (Opus 5.5, medium) por parte
 │              ├─ 2 falhas → implementer-high (Opus 5.5, high)
 │              └─ 2 falhas → implementer-fable (Fable 5.1, high)
-└─ Conferência verifier (Haiku, low)
+└─ Conferência verifier (Haiku 5.5, low)
 ```
 
 Os subagentes não veem a conversa. A memória compartilhada deles é o brief em
@@ -56,9 +56,9 @@ decisão, plano, falhas, comando de verificação).
 
 | Agente | Modelo | Effort | Edita? | Para |
 |---|---|---|---|---|
-| `scout` | Haiku | low | não | localizar código |
-| `log-reader` | Haiku | low | não | resumir logs e CI |
-| `verifier` | Haiku | low | não | rodar testes e resumir |
+| `scout` | Haiku 5.5 | low | não | localizar código |
+| `log-reader` | Haiku 5.5 | low | não | resumir logs e CI |
+| `verifier` | Haiku 5.5 | low | não | rodar testes e resumir |
 | `researcher` | Sonnet 5.5 | medium | não | entender fluxos |
 | `ideator` | Opus 5.5 | high | não | brainstorm |
 | `implementer` | Opus 5.5 | medium | sim | editar (padrão) |
@@ -67,6 +67,16 @@ decisão, plano, falhas, comando de verificação).
 
 O effort de um subagente só pode ser definido no arquivo dele, por isso há um agente por
 nível de execução.
+
+Os agentes usam os apelidos `haiku`, `sonnet`, `opus` e `fable`, que o Claude Code liga ao
+modelo mais novo de cada família. No Claude Code 2.1.295, o `haiku` roda o Haiku 5.5 e aceita
+o effort `low`; versões anteriores usavam o Haiku 4.5, que ignora o effort. O
+`tests/session_report.py` mostra a versão que rodou de fato.
+
+O Haiku 5.5 custa 5 vezes mais quando o pedido passa de 100 mil tokens, então `scout`,
+`log-reader` e `verifier` filtram arquivos e saídas grandes com `grep`, `head` e `tail`.
+Ele também não tem fallback automático para recusas: se um agente no Haiku 5.5 recusar ou
+voltar vazio, o Claude refaz a parte no Sonnet 5.5.
 `model: sonnet` no agente usa o alias do Claude Code para o Sonnet mais recente;
 o [ID oficial do Sonnet 5.5](https://platform.claude.com/docs/en/models/sonnet-5-5/overview)
 é `claude-sonnet-5-5`. Se seu plano ainda não o oferecer,
@@ -98,7 +108,7 @@ Com o plano conhecido:
 
 - **Sem Fable:** a escada termina no `implementer-high`. Depois de 2 falhas nele, o Claude
   para, resume o que foi tentado e pede sua ajuda. `/escalate` não funciona.
-- **Sem algum outro modelo:** o agente é chamado com um substituto (Haiku → Sonnet 5.5,
+- **Sem algum outro modelo:** o agente é chamado com um substituto (Haiku 5.5 → Sonnet 5.5,
   Sonnet 5.5 → Opus, Opus → Sonnet 5.5).
 - **Rede de segurança:** se um subagente falhar porque o modelo não está disponível, o
   Claude passa a tratar esse modelo como indisponível pelo resto da sessão.
@@ -166,3 +176,6 @@ python3 tests/session_report.py --dir <pasta do projeto> --last 3
 ```
 
 que lê os registros locais do Claude Code sem mostrar o conteúdo das respostas.
+
+Estimativa de custo, tempo e diferenças funcionais entre usar o pacote e não usar nada:
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md), gerada por `python3 tests/benchmark_estimate.py`.

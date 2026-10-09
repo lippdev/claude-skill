@@ -1,6 +1,6 @@
 ---
 name: big-task
-description: Coordena uma tarefa grande dividindo-a em análise, brainstorm e execução, e manda cada parte para um subagente com o modelo e o effort adequados (Haiku, Sonnet 5.5, Opus 5.5 ou Fable 5.1). Use quando o usuário pedir uma tarefa que exige entender o código, decidir o que fazer e depois implementar, ou quando ele digitar /big-task.
+description: Coordena uma tarefa grande dividindo-a em análise, brainstorm e execução, e manda cada parte para um subagente com o modelo e o effort adequados (Haiku 5.5, Sonnet 5.5, Opus 5.5 ou Fable 5.1). Use quando o usuário pedir uma tarefa que exige entender o código, decidir o que fazer e depois implementar, ou quando ele digitar /big-task.
 argument-hint: "<tarefa> [--auto]"
 ---
 
@@ -22,9 +22,9 @@ O effort vem do arquivo do agente, então escolha o agente pela combinação que
 
 | Agente | Modelo | Effort | Use para |
 |---|---|---|---|
-| `scout` | Haiku | low | localizar arquivos, símbolos, usos |
-| `log-reader` | Haiku | low | resumir logs, CI, stack traces |
-| `verifier` | Haiku | low | rodar testes/build/lint e resumir |
+| `scout` | Haiku 5.5 | low | localizar arquivos, símbolos, usos |
+| `log-reader` | Haiku 5.5 | low | resumir logs, CI, stack traces |
+| `verifier` | Haiku 5.5 | low | rodar testes/build/lint e resumir |
 | `researcher` | Sonnet 5.5 | medium | entender um fluxo lendo vários arquivos |
 | `ideator` | Opus 5.5 | high | brainstorm e comparação de opções |
 | `implementer` | Opus 5.5 | medium | editar código (nível padrão) |
@@ -42,6 +42,8 @@ ser chamados com o parâmetro `model` trocado. Siga essa linha:
   resuma o que foi tentado e peça ajuda ao usuário.
 - Um subagente falhou porque o modelo não está disponível → trate esse modelo como
   indisponível pelo resto da sessão e aplique a mesma regra.
+- Um agente no Haiku 5.5 recusou ou voltou vazio → refaça a mesma parte passando
+  `model: "sonnet"`. O Haiku 5.5 não tem fallback automático para recusas.
 
 Regra de escolha para cada parte:
 
@@ -49,7 +51,7 @@ Regra de escolha para cada parte:
 - **Decidir entre caminhos** → `ideator`.
 - **Mudar código** → sempre começa no `implementer`. Nunca comece no high ou no Fable.
 - **Conferir** → `verifier`. **Log grande** → `log-reader`.
-- Nunca mande edição para Haiku ou Sonnet.
+- Nunca mande edição para Haiku 5.5 ou Sonnet.
 
 ## Brief: a memória compartilhada
 

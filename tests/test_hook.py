@@ -136,7 +136,7 @@ class TestPlano(unittest.TestCase):
 
     def test_sonnet_55_no_plano_pro_e_id_explicito(self):
         _, ctx = self.regras(TOKEN_PILOT_PLAN="pro")
-        self.assertIn("Haiku, Sonnet 5.5, Opus 5.5", ctx)
+        self.assertIn("Haiku 5.5, Sonnet 5.5, Opus 5.5", ctx)
         self.assertIn("researcher (Sonnet 5.5, medium)", ctx)
         _, ctx = self.regras(TOKEN_PILOT_MODELS="claude-sonnet-5-5,claude-opus-5-5")
         self.assertIn("Sonnet 5.5, Opus 5.5", ctx)
