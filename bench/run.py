@@ -39,6 +39,21 @@ TASKS = REPO / "bench" / "tasks.json"
 PROJECT = REPO / "examples" / "estoque"
 RESULTS = REPO / "bench" / "results"
 
+def package_version():
+    """Commit do pacote usado na rodada (com "+" se havia mudanças não salvas), para separar
+    resultados de versões diferentes."""
+    try:
+        sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=REPO, capture_output=True,
+                             text=True).stdout.strip()
+        dirty = subprocess.run(["git", "status", "--porcelain", ".claude"], cwd=REPO, capture_output=True,
+                               text=True).stdout.strip()
+        return sha + ("+" if dirty else "")
+    except OSError:
+        return "?"
+
+
+PACKAGE_VERSION = package_version()
+
 ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Agent", "Skill", "TodoWrite",
                  "Bash(python3 *)", "Bash(git *)", "Bash(grep *)", "Bash(ls *)", "Bash(cat *)",
                  "Bash(head *)", "Bash(tail *)", "Bash(wc *)", "Bash(find *)"]
@@ -107,7 +122,7 @@ def run_one(task, arm, args, out):
             "passed": check.returncode == 0, "diff": diff.stdout.strip(),
             "models": {m: {"cost": u.get("costUSD"), "out": u.get("outputTokens")}
                        for m, u in (data.get("modelUsage") or {}).items()},
-            "error": error, "fake": bool(args.fake),
+            "error": error, "fake": bool(args.fake), "version": PACKAGE_VERSION,
         }
         out.write(json.dumps(row, ensure_ascii=False) + "\n")
         out.flush()
@@ -155,6 +170,10 @@ def compare(*paths):
     e têm custo conhecido: um braço que não terminou o trabalho não pode parecer mais barato."""
     rows = [json.loads(line) for path in paths for line in open(path, encoding="utf-8") if line.strip()]
     path = Path(paths[-1])
+    versions = sorted({r.get("version", "?") for r in rows if r["arm"] != "opus-medium"})
+    if len(versions) > 1:
+        print(f"Atenção: rodadas de versões diferentes do pacote ({', '.join(versions)}). "
+              "Compare uma versão por vez para medir uma mudança.\n")
     arms = sorted({r["arm"] for r in rows}, key=lambda a: (a != "opus-medium", a))
     tasks = sorted({r["task"] for r in rows})
     med = {}
