@@ -1,0 +1,14 @@
+{
+  "name": "token-pilot",
+  "description": "Token Pilot: economia de tokens no Claude Code com subagentes por modelo e disciplina de resposta.",
+  "owner": {
+    "name": "lippdev"
+  },
+  "plugins": [
+    {
+      "name": "token-pilot",
+      "source": ".",
+      "description": "Delega leitura, logs e testes a Haiku 5.5 e Sonnet 5.5, edita no Opus 5.5 com uma disciplina de resposta enxuta e escala o effort sozinho quando trava."
+    }
+  ]
+}

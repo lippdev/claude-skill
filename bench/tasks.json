@@ -1,0 +1,26 @@
+[
+  {
+    "id": "renomear",
+    "kind": "simples",
+    "prompt": "Renomeia a função valor_total para valor_total_estoque e atualiza onde ela é usada.",
+    "check": "grep -rq --include='*.py' 'def valor_total_estoque' estoque && ! grep -rqw --include='*.py' valor_total estoque tests"
+  },
+  {
+    "id": "corrigir-testes",
+    "kind": "grande",
+    "prompt": "Os testes do projeto estão falhando. Descobre por quê e corrige a causa, sem mudar os testes.",
+    "check": "python3 -m unittest -q"
+  },
+  {
+    "id": "simulador",
+    "kind": "log",
+    "prompt": "Roda python3 simular.py, descobre por que ele quebra e corrige sem mudar os dados em dados/.",
+    "check": "python3 simular.py > /dev/null"
+  },
+  {
+    "id": "reposicao",
+    "kind": "grande",
+    "prompt": "Analisa o projeto, corrige os testes que falham e implementa um alerta de reposição: um comando `reposicao` no cli que lista, para cada produto no mínimo ou abaixo dele, quantas unidades comprar para chegar ao dobro do mínimo. Escolha você mesmo o melhor desenho, sem me perguntar, e adicione testes.",
+    "check": "python3 -m unittest -q && python3 -m estoque.cli reposicao | grep -q CAF-001"
+  }
+]

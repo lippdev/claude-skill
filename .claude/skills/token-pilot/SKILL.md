@@ -1,6 +1,6 @@
 ---
 name: token-pilot
-description: Escolhe o modelo e o nível de esforço (effort) certos para cada momento da sessão para gastar menos tokens. Use no início de uma tarefa nova, quando o usuário travar no mesmo problema, quando for delegar busca ou leitura de logs, quando a conversa estiver longa, ou quando o usuário perguntar como economizar tokens, qual modelo ou effort usar, ou mencionar /model, /effort, /usage, /compact ou /clear.
+description: Escolhe modelo, effort e subagente para gastar menos tokens. Use ao começar uma tarefa, quando algo travar, ao delegar busca, logs ou testes, em conversa longa, ou quando o usuário falar de tokens, custo, /model, /effort, /usage, /compact ou /clear.
 ---
 
 # Token Pilot
@@ -18,15 +18,20 @@ A política completa (tabela de decisão, sinais e mensagens prontas) está em
   com `/model <nome>` e `/effort <nível>`. Quando a troca for recomendada, diga o comando
   exato em uma linha, e explique o motivo em no máximo uma frase.
 - **Você escolhe o modelo dos subagentes, e isso é automático.** Delegue por padrão:
-  - `scout` (Haiku, low): localizar arquivos, símbolos, grep amplo.
-  - `log-reader` (Haiku, low): ler e resumir logs, saídas de CI, stack traces.
-  - `verifier` (Haiku, low): rodar testes/build/lint e resumir.
+  - `scout` (Haiku 5.5, low): localizar arquivos, símbolos, grep amplo.
+  - `log-reader` (Haiku 5.5, low): ler e resumir logs, saídas de CI, stack traces.
+  - `verifier` (Haiku 5.5, low): rodar suítes de teste, build ou lint longas ou lentas e resumir. Teste curto, rode você mesmo com a saída filtrada.
    - `researcher` (Sonnet 5.5, medium): pesquisa que exige ler e comparar vários arquivos.
   - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
-  - `implementer` → `implementer-high` → `implementer-fable`: edição, subindo de nível
-    a cada 2 falhas na mesma parte. Nunca delegue edições para Haiku ou Sonnet.
+  - `implementer-high` → `implementer-fable`: escalada de uma parte que falhou 2 vezes
+    na sessão principal. `implementer` (medium) só para partes grandes e independentes em
+    paralelo. Nunca delegue edições para Haiku 5.5 ou Sonnet.
+- **Edite na sessão principal.** Ela fica com contexto pequeno porque recebe só resumos, e
+  delegar a edição abre um contexto novo no Opus e relê arquivos, o que custa mais.
+- **Siga a disciplina de resposta** que o hook injeta: a menor mudança que resolve a tarefa
+  inteira. É a maior economia em tokens de saída, que são o custo principal no Opus.
 - **Tarefa grande (analisar + decidir + implementar)?** Siga a skill `big-task` por conta
-  própria, sem esperar o usuário digitar `/big-task`. Edições pequenas e pontuais podem ficar na sessão principal.
+  própria, sem esperar o usuário digitar `/big-task`.
 - **As skills `/boost` e `/escalate` mudam o modelo/effort só enquanto estão ativas**
   (frontmatter `model`/`effort`). Isso é o jeito mais barato de "subir e voltar": a sessão
   volta sozinha ao padrão quando a skill termina.
@@ -72,7 +77,7 @@ hook usa heurística de palavras e pode errar).
 
 ### 3. Durante a sessão
 
-- Busca e leitura de logs → subagentes `scout`/`log-reader` (Haiku) ou `researcher`
+- Busca e leitura de logs → subagentes `scout`/`log-reader` (Haiku 5.5) ou `researcher`
   (Sonnet 5.5). Traga só a conclusão para a sessão principal.
 - Tarefa nova sem relação com a anterior → sugira `/clear`.
 - Conversa longa, num intervalo natural → sugira `/compact` **com uma nota do que manter**,

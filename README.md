@@ -6,7 +6,7 @@ daily driver":
 
 1. **Antes de começar:** Opus 5.5 com effort `medium`. Plan mode para mudanças em vários arquivos.
 2. **Quando travar:** `medium` → `high`; se o `high` travar duas vezes → Fable 5.1. Volta ao padrão quando resolver.
-3. **Durante a sessão:** busca e logs no Haiku, pesquisa em vários arquivos no Sonnet 5.5, edição no Opus 5.5. `/clear` entre tarefas, `/compact` com nota.
+3. **Durante a sessão:** busca e logs no Haiku 5.5, pesquisa em vários arquivos no Sonnet 5.5, edição no Opus 5.5. `/clear` entre tarefas, `/compact` com nota.
 4. **Meça:** compare o `/usage` de cada modelo numa tarefa real.
 
 ## Como funciona
@@ -21,6 +21,35 @@ Tudo roda sozinho, sem comandos:
 
 Os comandos `/big-task`, `/boost` e `/escalate` continuam existindo para forçar o fluxo.
 
+### Tarefas curtas
+
+O pacote também economiza quando o pedido é pequeno. A cada mensagem, o hook classifica o
+pedido e passa ao Claude uma instrução silenciosa (você não vê aviso):
+
+| Pedido | Exemplo | O que acontece |
+|---|---|---|
+| Mecânico | "renomeia X para Y", "corrige o typo", "troca A por B", "remove os prints" | O `quick-edit` (Haiku 5.5) edita e confere; o Opus só despacha e responde em uma linha. Nas rodadas reais: cerca de −40% de custo, mesmo tempo. |
+| Curto | "por que o teste de frete falha?" | O Opus resolve direto, sem subagentes, sem plano e sem resumo longo. Fica perto do neutro. |
+| Médio ou grande | pedidos longos, com várias etapas | A disciplina de edição e o mapa do código entram uma vez na sessão; tarefa grande segue o `big-task`. |
+
+A abertura de toda sessão leva só um núcleo curto de regras (~900 caracteres). A disciplina
+de edição e o mapa do código só entram quando a tarefa pede. Ajuste o limite de pedido curto
+com `TOKEN_PILOT_SHORT_PROMPT_CHARS` (padrão 160).
+
+### Disciplina de resposta e mapa do código
+
+- **Disciplina de resposta** (`.claude/hooks/disciplina.md`): a menor mudança que resolve a
+  tarefa inteira, ler antes de editar, sem código "para depois", e uma resposta curta que diz
+  o que ficou de fora. No Opus 5.5, o que o modelo escreve é o custo principal, e é aí que
+  ela economiza. Nunca corta validação, tratamento de erro, segurança, acessibilidade nem o
+  que foi pedido. Entra na sessão principal na primeira tarefa média ou grande e, pelo hook `SubagentStart`, em cada
+  subagente; os agentes de leitura recebem uma versão mais curta.
+- **Mapa do código:** até 2 mil caracteres com as funções, classes e exports de cada pasta,
+  gerado sem modelo em até 2 s. Ajuda a reutilizar o que existe e evita releituras.
+  Desligue com `TOKEN_PILOT_MAP=0` ou ajuste o teto com `TOKEN_PILOT_MAP_CHARS`.
+- Ambas foram inspiradas no [ponytail](https://github.com/dietrichgebert/ponytail) (MIT),
+  com texto e código próprios.
+
 O Claude não consegue trocar o modelo da sessão principal sozinho, mas consegue escolher
 o modelo de cada **subagente**. Então a sessão principal vira uma coordenadora que nunca
 troca de modelo (o cache dela não é refeito) e manda cada parte para o agente certo:
@@ -28,12 +57,12 @@ troca de modelo (o cache dela não é refeito) e manda cada parte para o agente 
 ```
 /big-task <tarefa>          (sessão principal: Opus 5.5, medium, contexto pequeno)
 │
-├─ Análise     scout ×N (Haiku, low) em paralelo + researcher (Sonnet 5.5, medium)
+├─ Análise     scout ×N (Haiku 5.5, low) em paralelo + researcher (Sonnet 5.5, medium)
 ├─ Brainstorm  ideator (Opus 5.5, high), recebe só o resumo      ⏸ você escolhe
-├─ Execução    implementer (Opus 5.5, medium) por parte
+├─ Execução    na própria sessão principal (Opus 5.5, medium, contexto pequeno)
 │              ├─ 2 falhas → implementer-high (Opus 5.5, high)
 │              └─ 2 falhas → implementer-fable (Fable 5.1, high)
-└─ Conferência verifier (Haiku, low)
+└─ Conferência verifier (Haiku 5.5, low)
 ```
 
 Os subagentes não veem a conversa. A memória compartilhada deles é o brief em
@@ -56,17 +85,28 @@ decisão, plano, falhas, comando de verificação).
 
 | Agente | Modelo | Effort | Edita? | Para |
 |---|---|---|---|---|
-| `scout` | Haiku | low | não | localizar código |
-| `log-reader` | Haiku | low | não | resumir logs e CI |
-| `verifier` | Haiku | low | não | rodar testes e resumir |
+| `scout` | Haiku 5.5 | low | não | localizar código |
+| `log-reader` | Haiku 5.5 | low | não | resumir logs e CI |
+| `verifier` | Haiku 5.5 | low | não | rodar testes e resumir |
 | `researcher` | Sonnet 5.5 | medium | não | entender fluxos |
 | `ideator` | Opus 5.5 | high | não | brainstorm |
-| `implementer` | Opus 5.5 | medium | sim | editar (padrão) |
-| `implementer-high` | Opus 5.5 | high | sim | 2 falhas no implementer |
+| `quick-edit` | Haiku 5.5 | medium | sim | mudança mecânica: renomear, trocar texto, typo, import |
+| `implementer` | Opus 5.5 | medium | sim | parte grande e independente, em paralelo |
+| `implementer-high` | Opus 5.5 | high | sim | 2 falhas na sessão principal |
 | `implementer-fable` | Fable 5.1 | high | sim | 2 falhas no implementer-high |
 
 O effort de um subagente só pode ser definido no arquivo dele, por isso há um agente por
 nível de execução.
+
+Os agentes usam os apelidos `haiku`, `sonnet`, `opus` e `fable`, que o Claude Code liga ao
+modelo mais novo de cada família. No Claude Code 2.1.295, o `haiku` roda o Haiku 5.5 e aceita
+o effort `low`; versões anteriores usavam o Haiku 4.5, que ignora o effort. O
+`tests/session_report.py` mostra a versão que rodou de fato.
+
+O Haiku 5.5 custa 5 vezes mais quando o pedido passa de 100 mil tokens, então `scout`,
+`log-reader` e `verifier` filtram arquivos e saídas grandes com `grep`, `head` e `tail`.
+Ele também não tem fallback automático para recusas: se um agente no Haiku 5.5 recusar ou
+voltar vazio, o Claude refaz a parte no Sonnet 5.5.
 `model: sonnet` no agente usa o alias do Claude Code para o Sonnet mais recente;
 o [ID oficial do Sonnet 5.5](https://platform.claude.com/docs/en/models/sonnet-5-5/overview)
 é `claude-sonnet-5-5`. Se seu plano ainda não o oferecer,
@@ -98,7 +138,7 @@ Com o plano conhecido:
 
 - **Sem Fable:** a escada termina no `implementer-high`. Depois de 2 falhas nele, o Claude
   para, resume o que foi tentado e pede sua ajuda. `/escalate` não funciona.
-- **Sem algum outro modelo:** o agente é chamado com um substituto (Haiku → Sonnet 5.5,
+- **Sem algum outro modelo:** o agente é chamado com um substituto (Haiku 5.5 → Sonnet 5.5,
   Sonnet 5.5 → Opus, Opus → Sonnet 5.5).
 - **Rede de segurança:** se um subagente falhar porque o modelo não está disponível, o
   Claude passa a tratar esse modelo como indisponível pelo resto da sessão.
@@ -133,15 +173,35 @@ o app como servidor MCP (ou CLI) com "ler contexto" e "gravar contexto" e defina
 
 ## Instalação
 
-**Num projeto:** copie a pasta `.claude/` para a raiz do projeto e adicione `.token-pilot/`
-ao `.gitignore`. Se o projeto já tiver `.claude/settings.json`, junte a seção `hooks` em
-vez de sobrescrever. Informe seu plano com `python3 .claude/hooks/token_pilot.py --plan <plano>`.
-Abra uma sessão nova: agentes e skills são carregados no início.
+**Como plugin (recomendado):** dentro do Claude Code,
 
-**Em todos os projetos:** copie `skills/` e `agents/` para `~/.claude/`, o hook para
-`~/.claude/hooks/token_pilot.py`, e registre-o em `~/.claude/settings.json` com
-`"command": "python3 ~/.claude/hooks/token_pilot.py"` nos eventos `SessionStart` e
-`UserPromptSubmit`.
+```
+/plugin marketplace add lippdev/claude-skill
+/plugin install token-pilot@token-pilot
+```
+
+ou, no Claude Code 2.1.275 ou mais novo, numa linha só:
+
+```
+/plugin install token-pilot --marketplace lippdev/claude-skill
+```
+
+Depois, informe seu plano uma vez (o aviso do primeiro início mostra o caminho exato do script):
+
+```bash
+python3 ~/.claude/plugins/<...>/token-pilot/.claude/hooks/token_pilot.py --plan pro
+```
+
+ou defina `TOKEN_PILOT_PLAN=pro` no ambiente. Como plugin, os agentes aparecem com o prefixo
+`token-pilot:` (por exemplo, `token-pilot:scout`). O plugin não muda o modelo nem o effort da
+sessão: deixe a sessão principal no Opus 5.5 `medium` (`/model opus` e `/effort medium`, ou
+`"model": "opus"` e `"effortLevel": "medium"` no seu `settings.json`).
+
+**Copiando a pasta, num projeto:** copie `.claude/` para a raiz do projeto e adicione
+`.token-pilot/` ao `.gitignore`. Se o projeto já tiver `.claude/settings.json`, junte a seção
+`hooks` em vez de sobrescrever. Abra uma sessão nova: agentes e skills são carregados no início.
+
+**Testar sem instalar:** `claude --plugin-dir <pasta deste repositório>`.
 
 Requer Python 3.
 
@@ -166,3 +226,6 @@ python3 tests/session_report.py --dir <pasta do projeto> --last 3
 ```
 
 que lê os registros locais do Claude Code sem mostrar o conteúdo das respostas.
+
+Estimativa de custo, tempo e diferenças funcionais entre usar o pacote e não usar nada:
+[`docs/BENCHMARK.md`](docs/BENCHMARK.md), gerada por `python3 tests/benchmark_estimate.py`.

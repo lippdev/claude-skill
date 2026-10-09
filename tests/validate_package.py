@@ -19,6 +19,7 @@ EXPECTED_AGENTS = {
     "implementer": ("opus", "medium"),
     "implementer-high": ("opus", "high"),
     "implementer-fable": ("fable", "high"),
+    "quick-edit": ("haiku", "medium"),
 }
 READ_ONLY = {"scout", "log-reader", "verifier", "researcher", "ideator"}
 EXPECTED_SKILLS = {"token-pilot", "big-task", "boost", "escalate"}
@@ -87,13 +88,18 @@ check(EXPECTED_SKILLS <= set(skills), f"skills faltando: {EXPECTED_SKILLS - set(
 # Todo agente citado na big-task precisa existir.
 if "big-task" in skills:
     body = skills["big-task"][1]
-    cited = set(re.findall(r"`((?:scout|log-reader|verifier|researcher|ideator|implementer(?:-high|-fable)?))`", body))
+    cited = set(re.findall(r"`((?:scout|log-reader|verifier|researcher|ideator|quick-edit|implementer(?:-high|-fable)?))`", body))
     check(cited == set(EXPECTED_AGENTS), f"big-task cita {sorted(cited)}, esperado {sorted(EXPECTED_AGENTS)}")
 
 # Hook registrado e existente.
 settings = (ROOT / "settings.json").read_text()
 check("token_pilot.py" in settings, "settings.json não registra o hook")
 check((ROOT / "hooks" / "token_pilot.py").exists(), "hook token_pilot.py não existe")
+for event in ("SessionStart", "UserPromptSubmit", "SubagentStart"):
+    check(f'"{event}"' in settings, f"settings.json não registra o hook em {event}")
+disc = (ROOT / "hooks" / "disciplina.md")
+check(disc.exists() and "## edição" in disc.read_text() and "## leitura" in disc.read_text(),
+      "disciplina.md precisa das seções '## edição' e '## leitura'")
 
 if errors:
     print("FALHOU:")

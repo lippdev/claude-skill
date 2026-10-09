@@ -1,6 +1,6 @@
 ---
 name: big-task
-description: Coordena uma tarefa grande dividindo-a em análise, brainstorm e execução, e manda cada parte para um subagente com o modelo e o effort adequados (Haiku, Sonnet 5.5, Opus 5.5 ou Fable 5.1). Use quando o usuário pedir uma tarefa que exige entender o código, decidir o que fazer e depois implementar, ou quando ele digitar /big-task.
+description: Coordena uma tarefa grande (analisar, decidir e implementar): leitura no Haiku 5.5 e Sonnet 5.5, brainstorm no Opus 5.5 high, edição na sessão principal. Use também quando o usuário digitar /big-task.
 argument-hint: "<tarefa> [--auto]"
 ---
 
@@ -8,8 +8,8 @@ argument-hint: "<tarefa> [--auto]"
 
 Tarefa: $ARGUMENTS
 
-Você é a **coordenadora**. Você não lê código em volume nem edita arquivos: você divide a
-tarefa, escolhe o agente de cada parte, mantém o brief e junta os resultados. Assim a
+Você é a **coordenadora**. Você não lê código em volume: delega a leitura, decide com base nos
+resumos, mantém o brief e **edita você mesma**, porque seu contexto fica pequeno. Assim a
 sessão principal fica pequena, nunca troca de modelo (o cache dela não é refeito) e cada
 parte roda no modelo mais barato que dá conta dela.
 
@@ -22,14 +22,18 @@ O effort vem do arquivo do agente, então escolha o agente pela combinação que
 
 | Agente | Modelo | Effort | Use para |
 |---|---|---|---|
-| `scout` | Haiku | low | localizar arquivos, símbolos, usos |
-| `log-reader` | Haiku | low | resumir logs, CI, stack traces |
-| `verifier` | Haiku | low | rodar testes/build/lint e resumir |
+| `scout` | Haiku 5.5 | low | localizar arquivos, símbolos, usos |
+| `log-reader` | Haiku 5.5 | low | resumir logs, CI, stack traces |
+| `verifier` | Haiku 5.5 | low | rodar testes/build/lint e resumir |
 | `researcher` | Sonnet 5.5 | medium | entender um fluxo lendo vários arquivos |
 | `ideator` | Opus 5.5 | high | brainstorm e comparação de opções |
-| `implementer` | Opus 5.5 | medium | editar código (nível padrão) |
-| `implementer-high` | Opus 5.5 | high | parte que falhou 2× no implementer |
+| `quick-edit` | Haiku 5.5 | medium | parte mecânica: renomear, trocar texto, ajustar imports |
+| `implementer` | Opus 5.5 | medium | parte grande e independente, em paralelo (worktree) |
+| `implementer-high` | Opus 5.5 | high | parte que falhou 2× (na sessão principal) |
 | `implementer-fable` | Fable 5.1 | high | parte que falhou 2× no implementer-high |
+
+A edição fica na sessão principal: delegar a um `implementer` abre um contexto novo no Opus,
+paga a gravação dele e relê arquivos, o que custa mais do que editar aqui.
 
 ### Plano do usuário
 
@@ -42,14 +46,18 @@ ser chamados com o parâmetro `model` trocado. Siga essa linha:
   resuma o que foi tentado e peça ajuda ao usuário.
 - Um subagente falhou porque o modelo não está disponível → trate esse modelo como
   indisponível pelo resto da sessão e aplique a mesma regra.
+- Um agente no Haiku 5.5 recusou ou voltou vazio → refaça a mesma parte passando
+  `model: "sonnet"`. O Haiku 5.5 não tem fallback automático para recusas.
 
 Regra de escolha para cada parte:
 
 - **Só achar coisas** → `scout`. **Entender como coisas se ligam** → `researcher`.
 - **Decidir entre caminhos** → `ideator`.
-- **Mudar código** → sempre começa no `implementer`. Nunca comece no high ou no Fable.
+- **Mudar código** → você mesma, na sessão principal. `implementer` só para partes grandes e
+  independentes que valha rodar em paralelo. Nunca comece no high ou no Fable.
 - **Conferir** → `verifier`. **Log grande** → `log-reader`.
-- Nunca mande edição para Haiku ou Sonnet.
+- **Parte mecânica** (renomear, trocar texto, ajustar imports) → `quick-edit`. Fora disso,
+  nunca mande edição para Haiku 5.5 ou Sonnet.
 
 ## Brief: a memória compartilhada
 
@@ -96,18 +104,20 @@ execução com um único `implementer`.
 1. Quebre a decisão em partes pequenas e verificáveis e escreva o Plano no brief.
    Se forem mais de 3 arquivos, ⏸ mostre o plano e peça aprovação (com `--auto`, siga).
 2. Para cada parte, em ordem:
-   1. Chame `implementer` com: número da parte, o que fazer, arquivos prováveis e o
-      comando de verificação.
-   2. Se voltar `OK`, chame `verifier` para confirmar (pule se o implementer já mostrou
-      os testes passando).
-   3. Se falhar, registre em Falhas e aplique a escada:
-      - 2 falhas no `implementer` → `implementer-high`
+   1. Edite você mesma, seguindo a disciplina de resposta (menor mudança completa) e o
+      mapa do código. Abra só os arquivos que a parte toca.
+   2. Verifique. Se a suíte for curta, rode você mesma com a saída filtrada (`2>&1 | tail -n 30`).
+      Se for longa ou lenta, chame `verifier` para rodar e resumir. Chamar um subagente para
+      um teste de poucos segundos só acrescenta espera.
+   3. Se falhar, registre em Falhas e tente de novo. Depois de 2 falhas na mesma parte,
+      aplique a escada:
+      - 2 falhas na sessão principal → `implementer-high`, com o que já falhou
       - 2 falhas no `implementer-high` → `implementer-fable` (só se o plano tiver Fable;
         sem Fable, pare aqui e explique ao usuário o que falta)
       - 2 falhas no `implementer-fable` → pare e explique ao usuário o que falta.
-   4. Voltou OK depois de subir? A próxima parte começa de novo no `implementer`.
-3. Partes que não tocam os mesmos arquivos podem rodar em paralelo com
-   `isolation: "worktree"`. Na dúvida, rode em sequência.
+   4. Resolveu depois de subir? A próxima parte volta para você.
+3. Só delegue partes ao `implementer` quando forem grandes, não tocarem os mesmos arquivos e
+   valer rodar em paralelo (`isolation: "worktree"`). Na dúvida, edite em sequência aqui.
 
 ### 4. Fechamento
 
@@ -115,7 +125,7 @@ Responda ao usuário em até 15 linhas:
 
 - o que foi feito (partes e arquivos),
 - resultado da verificação final,
-- quais níveis foram usados, por exemplo `scout×3, ideator×1, implementer×3, implementer-high×1`,
+- quais agentes foram usados, por exemplo `scout×3, ideator×1, verifier×3, implementer-high×1`,
 - pendências, se houver.
 
 Termine com `💡 Token Pilot: tarefa concluída. Se o próximo pedido não tiver relação, use /clear.`
