@@ -21,13 +21,28 @@ Tudo roda sozinho, sem comandos:
 
 Os comandos `/big-task`, `/boost` e `/escalate` continuam existindo para forçar o fluxo.
 
+### Tarefas curtas
+
+O pacote também economiza quando o pedido é pequeno. A cada mensagem, o hook classifica o
+pedido e passa ao Claude uma instrução silenciosa (você não vê aviso):
+
+| Pedido | Exemplo | O que acontece |
+|---|---|---|
+| Mecânico | "renomeia X para Y", "corrige o typo", "troca A por B", "remove os prints" | O `quick-edit` (Haiku 5.5) edita e confere; o Opus só despacha e responde em uma linha. Nas rodadas reais: cerca de −40% de custo, mesmo tempo. |
+| Curto | "por que o teste de frete falha?" | O Opus resolve direto, sem subagentes, sem plano e sem resumo longo. Fica perto do neutro. |
+| Médio ou grande | pedidos longos, com várias etapas | A disciplina de edição e o mapa do código entram uma vez na sessão; tarefa grande segue o `big-task`. |
+
+A abertura de toda sessão leva só um núcleo curto de regras (~900 caracteres). A disciplina
+de edição e o mapa do código só entram quando a tarefa pede. Ajuste o limite de pedido curto
+com `TOKEN_PILOT_SHORT_PROMPT_CHARS` (padrão 160).
+
 ### Disciplina de resposta e mapa do código
 
 - **Disciplina de resposta** (`.claude/hooks/disciplina.md`): a menor mudança que resolve a
   tarefa inteira, ler antes de editar, sem código "para depois", e uma resposta curta que diz
   o que ficou de fora. No Opus 5.5, o que o modelo escreve é o custo principal, e é aí que
   ela economiza. Nunca corta validação, tratamento de erro, segurança, acessibilidade nem o
-  que foi pedido. Vai para a sessão principal e, pelo hook `SubagentStart`, para cada
+  que foi pedido. Entra na sessão principal na primeira tarefa média ou grande e, pelo hook `SubagentStart`, em cada
   subagente; os agentes de leitura recebem uma versão mais curta.
 - **Mapa do código:** até 2 mil caracteres com as funções, classes e exports de cada pasta,
   gerado sem modelo em até 2 s. Ajuda a reutilizar o que existe e evita releituras.
@@ -75,6 +90,7 @@ decisão, plano, falhas, comando de verificação).
 | `verifier` | Haiku 5.5 | low | não | rodar testes e resumir |
 | `researcher` | Sonnet 5.5 | medium | não | entender fluxos |
 | `ideator` | Opus 5.5 | high | não | brainstorm |
+| `quick-edit` | Haiku 5.5 | medium | sim | mudança mecânica: renomear, trocar texto, typo, import |
 | `implementer` | Opus 5.5 | medium | sim | parte grande e independente, em paralelo |
 | `implementer-high` | Opus 5.5 | high | sim | 2 falhas na sessão principal |
 | `implementer-fable` | Fable 5.1 | high | sim | 2 falhas no implementer-high |
