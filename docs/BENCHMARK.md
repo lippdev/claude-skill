@@ -108,12 +108,24 @@ Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa n
 limpas, com e sem o pacote, e compara custo, tempo, turnos e se os testes passam. Veja
 `bench/README.md`.
 
-**Primeira rodada real** (09/10/2026, Claude Code 2.1.295, tarefa "renomear", 1 rodada por
-braço, repetida 2 vezes): os dois braços acertaram. O Token Pilot custou +6% e +27%: o
-contexto inicial é ~2,5 mil tokens maior e houve um turno a mais. Com uma rodada só, a
-diferença entre as duas ainda é ruído; ela só confirma que, em pedido simples, o pacote
-custa um pouco mais. As tarefas grandes, onde está a economia estimada, ainda não foram
-medidas.
+**Rodadas reais até agora** (09/10/2026, Claude Code 2.1.295, 1 rodada por braço; ainda é
+pouco para tirar números, mas já mostra a direção):
+
+| Tarefa | Opus 5.5 medium | Token Pilot | Custo | Tempo | Os dois acertaram? |
+|---|---|---|---|---|---|
+| `renomear` (2 rodadas) | $0.168 e $0.139 | $0.178 e $0.177 | +6% e +27% | −9% e +11% | sim |
+| `corrigir-testes` | $0.188 · 25 s | $0.202 · 40 s | +7% | +60% | sim |
+
+O que isso mostra:
+
+- **Num projeto pequeno, o pacote ainda não economiza.** As tarefas custaram US$ 0,14 a
+  US$ 0,20, bem menos que a "tarefa grande" da estimativa (US$ 1,37). Não há leitura grande
+  para tirar do Opus, e sobra o custo fixo de ~2,5 mil tokens de contexto.
+- **A chamada ao `verifier` atrasou a correção em ~15 s** para rodar um teste de menos de um
+  segundo. Depois disso, testes curtos passaram a rodar na própria sessão, e o `verifier`
+  ficou para suítes longas ou lentas.
+- **A economia estimada depende de tarefas maiores.** Ela ainda precisa ser medida num
+  projeto maior, com leitura de verdade, antes de ser tratada como fato.
 
 ## Premissas principais
 

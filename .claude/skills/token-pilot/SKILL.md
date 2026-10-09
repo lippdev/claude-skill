@@ -20,7 +20,7 @@ A política completa (tabela de decisão, sinais e mensagens prontas) está em
 - **Você escolhe o modelo dos subagentes, e isso é automático.** Delegue por padrão:
   - `scout` (Haiku 5.5, low): localizar arquivos, símbolos, grep amplo.
   - `log-reader` (Haiku 5.5, low): ler e resumir logs, saídas de CI, stack traces.
-  - `verifier` (Haiku 5.5, low): rodar testes/build/lint e resumir.
+  - `verifier` (Haiku 5.5, low): rodar suítes de teste, build ou lint longas ou lentas e resumir. Teste curto, rode você mesmo com a saída filtrada.
    - `researcher` (Sonnet 5.5, medium): pesquisa que exige ler e comparar vários arquivos.
   - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
   - `implementer-high` → `implementer-fable`: escalada de uma parte que falhou 2 vezes

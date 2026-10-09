@@ -104,7 +104,9 @@ execução com um único `implementer`.
 2. Para cada parte, em ordem:
    1. Edite você mesma, seguindo a disciplina de resposta (menor mudança completa) e o
       mapa do código. Abra só os arquivos que a parte toca.
-   2. Chame `verifier` para rodar a verificação e resumir o resultado.
+   2. Verifique. Se a suíte for curta, rode você mesma com a saída filtrada (`2>&1 | tail -n 30`).
+      Se for longa ou lenta, chame `verifier` para rodar e resumir. Chamar um subagente para
+      um teste de poucos segundos só acrescenta espera.
    3. Se falhar, registre em Falhas e tente de novo. Depois de 2 falhas na mesma parte,
       aplique a escada:
       - 2 falhas na sessão principal → `implementer-high`, com o que já falhou
