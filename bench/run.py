@@ -145,7 +145,14 @@ def geomean(values):
     return math.exp(sum(math.log(v) for v in values) / len(values)) if values else None
 
 
+def median_or_none(values):
+    values = [v for v in values if v is not None]
+    return statistics.median(values) if values else None
+
+
 def compare(*paths):
+    """Resume os resultados. Custo, tempo e turnos usam só rodadas que passaram na verificação
+    e têm custo conhecido: um braço que não terminou o trabalho não pode parecer mais barato."""
     rows = [json.loads(line) for path in paths for line in open(path, encoding="utf-8") if line.strip()]
     path = Path(paths[-1])
     arms = sorted({r["arm"] for r in rows}, key=lambda a: (a != "opus-medium", a))
@@ -154,34 +161,46 @@ def compare(*paths):
     for t in tasks:
         for a in arms:
             rs = [r for r in rows if r["task"] == t and r["arm"] == a]
-            if rs:
-                med[t, a] = {
-                    "cost": statistics.median([r["cost"] for r in rs if r["cost"] is not None] or [0]),
-                    "time": statistics.median([r["duration_s"] for r in rs]),
-                    "turns": statistics.median([r["turns"] or 0 for r in rs]),
-                    "pass": sum(r["passed"] for r in rs) / len(rs), "n": len(rs),
-                }
+            if not rs:
+                continue
+            ok = [r for r in rs if r["passed"] and r.get("cost") is not None]
+            med[t, a] = {
+                "cost": median_or_none([r["cost"] for r in ok]),
+                "time": median_or_none([r["duration_s"] for r in ok]),
+                "turns": median_or_none([r["turns"] for r in ok]),
+                "pass": sum(r["passed"] for r in rs) / len(rs), "n": len(rs), "n_ok": len(ok),
+                "no_cost": sum(r.get("cost") is None for r in rs),
+            }
     fake = any(r.get("fake") for r in rows)
+    money = lambda v: f"${v:.3f}" if v is not None else "—"
+    num = lambda v, unit="": f"{v:.0f}{unit}" if v is not None else "—"
     print(f"# Benchmark real{' (SIMULADO, --fake)' if fake else ''}: {path.name}\n")
-    print("| Tarefa | Braço | Custo (mediana) | Tempo | Turnos | Verificação passou | n |")
+    print("Custo, tempo e turnos: mediana só das rodadas que passaram na verificação e têm custo conhecido.\n")
+    print("| Tarefa | Braço | Custo | Tempo | Turnos | Verificação passou | Rodadas usadas / total |")
     print("|---|---|---|---|---|---|---|")
     for t in tasks:
         for a in arms:
             m = med.get((t, a))
             if m:
-                print(f"| {t} | {a} | ${m['cost']:.3f} | {m['time']:.0f}s | {m['turns']:.0f} | {m['pass']:.0%} | {m['n']} |")
-    print("\n| Braço x opus-medium | Custo | Tempo | Turnos | Verificação passou |")
-    print("|---|---|---|---|---|")
+                note = f" ({m['no_cost']} sem custo)" if m["no_cost"] else ""
+                print(f"| {t} | {a} | {money(m['cost'])} | {num(m['time'], 's')} | {num(m['turns'])} | "
+                      f"{m['pass']:.0%} | {m['n_ok']} / {m['n']}{note} |")
+    print("\n| Braço x opus-medium | Custo | Tempo | Turnos | Verificação passou | Tarefas comparadas |")
+    print("|---|---|---|---|---|---|")
     for a in arms[1:]:
-        ratios = {k: geomean([med[t, a][k] / med[t, "opus-medium"][k] for t in tasks
-                              if (t, a) in med and (t, "opus-medium") in med and med[t, "opus-medium"][k]])
-                  for k in ("cost", "time", "turns")}
-        passed = statistics.mean([med[t, a]["pass"] for t in tasks if (t, a) in med])
-        base_pass = statistics.mean([med[t, "opus-medium"]["pass"] for t in tasks if (t, "opus-medium") in med])
+        comparable = [t for t in tasks if (t, a) in med and (t, "opus-medium") in med
+                      and med[t, a]["n_ok"] and med[t, "opus-medium"]["n_ok"]]
+        ratios = {k: geomean([med[t, a][k] / med[t, "opus-medium"][k] for t in comparable
+                              if med[t, "opus-medium"][k]]) for k in ("cost", "time", "turns")}
+        both = [t for t in tasks if (t, a) in med and (t, "opus-medium") in med]
+        passed = statistics.mean([med[t, a]["pass"] for t in both]) if both else 0
+        base_pass = statistics.mean([med[t, "opus-medium"]["pass"] for t in both]) if both else 0
         fmt = lambda v: f"{(v - 1) * 100:+.0f}%" if v else "—"
         print(f"| {a} | {fmt(ratios['cost'])} | {fmt(ratios['time'])} | {fmt(ratios['turns'])} | "
-              f"{passed:.0%} (base {base_pass:.0%}) |")
-    print("\nRazões: média geométrica, entre as tarefas, da mediana do braço dividida pela mediana do opus-medium.")
+              f"{passed:.0%} (base {base_pass:.0%}) | {len(comparable)} de {len(both)} |")
+    print("\nRazões: média geométrica, entre as tarefas em que os dois braços têm rodadas aprovadas, da "
+          "mediana do braço dividida pela mediana do opus-medium. Tarefas sem rodada aprovada num dos "
+          "braços ficam de fora da razão e aparecem em \"Verificação passou\".")
 
 
 def main():
