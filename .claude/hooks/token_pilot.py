@@ -11,6 +11,7 @@ Nunca bloqueia o prompt: qualquer erro sai com código 0 e sem saída.
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -188,10 +189,11 @@ def session_rules(models, source):
         "  Rodar testes -> verifier. Entender um fluxo em vários arquivos -> researcher (Sonnet 5.5, medium).",
         "- Tarefa grande (analisar + decidir + implementar, ou vários arquivos) -> siga a skill",
         "  big-task automaticamente: análise com scouts em paralelo, brainstorm no ideator,",
-        "  execução no implementer, verificação no verifier.",
-        "- Edição pontual (1-2 arquivos conhecidos) -> faça na sessão principal.",
+        "  execução na própria sessão principal, verificação no verifier.",
+        "- Edite na sessão principal: ela fica com contexto pequeno porque só recebe resumos.",
+        "  implementer só para partes grandes e independentes que possam rodar em paralelo.",
         f"- Mesma parte falhou 2x -> delegue ao implementer-high; {ladder}",
-        "  Resolveu -> a próxima parte volta ao implementer. Nunca peça ao usuário para trocar /model ou /effort.",
+        "  Resolveu -> volte a editar na sessão principal. Nunca peça ao usuário para trocar /model ou /effort.",
         "- Assunto novo sem relação -> sugira /clear. Conversa longa num intervalo -> sugira /compact com nota.",
     ]
     overrides = []
@@ -208,6 +210,124 @@ def session_rules(models, source):
     lines.append("- Agente no Haiku 5.5 recusou ou voltou vazio -> refaça a mesma parte com model: \"sonnet\" "
                  "(o Haiku 5.5 não tem fallback automático para recusas).")
     return "\n".join(lines)
+
+# ---------------------------------------------------------------- disciplina e mapa
+
+HOOK_DIR = Path(__file__).resolve().parent
+# Agentes que só leem recebem a disciplina curta; os demais, a de edição.
+READ_ONLY_AGENTS = {"scout", "log-reader", "verifier", "researcher", "ideator", "explore", "plan"}
+# Agentes que recebem o mapa do código (os que leem ou editam código, não logs).
+MAP_AGENTS = {"scout", "researcher", "ideator", "implementer", "implementer-high", "implementer-fable",
+              "general-purpose", "explore", "plan"}
+MAP_BUDGET = int(os.environ.get("TOKEN_PILOT_MAP_CHARS", "2000"))
+MAP_SECONDS = 2.0
+MAP_MAX_FILES = 600
+SKIP_DIRS = {".git", "node_modules", "vendor", "dist", "build", "out", "target", "__pycache__",
+             ".venv", "venv", ".next", ".token-pilot", ".claude", "coverage", "migrations"}
+SYMBOL_PATTERNS = {
+    ".py": r"^(?:async\s+)?def\s+(\w+)|^class\s+(\w+)",
+    ".js": r"^export\s+(?:default\s+)?(?:async\s+)?(?:function\*?|class|const|let)\s+(\w+)|^(?:async\s+)?function\s+(\w+)",
+    ".go": r"^func\s+(?:\([^)]*\)\s*)?(\w+)|^type\s+(\w+)",
+    ".rb": r"^\s*(?:class|module)\s+(\w+)|^\s{0,2}def\s+(?:self\.)?(\w+)",
+    ".rs": r"^pub(?:\(crate\))?\s+(?:async\s+)?(?:fn|struct|enum|trait)\s+(\w+)",
+    ".java": r"^\s*(?:public\s+)?(?:abstract\s+|final\s+)?(?:class|interface|enum|record)\s+(\w+)",
+    ".php": r"^\s*(?:final\s+|abstract\s+)?(?:class|interface|trait)\s+(\w+)|^function\s+(\w+)",
+}
+for ext in (".ts", ".tsx", ".jsx", ".mjs", ".cjs"):
+    SYMBOL_PATTERNS[ext] = SYMBOL_PATTERNS[".js"]
+for ext in (".kt", ".cs", ".swift"):
+    SYMBOL_PATTERNS[ext] = r"^\s*(?:public\s+|internal\s+|open\s+|final\s+)*(?:class|interface|struct|enum|object|protocol)\s+(\w+)"
+
+
+def discipline(section):
+    """Texto da disciplina de resposta ("edição" ou "leitura"), lido de disciplina.md."""
+    try:
+        text = (HOOK_DIR / "disciplina.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    m = re.search(rf"^## {section}\s*\n(.*?)(?=^## |\Z)", text, re.S | re.M)
+    return m.group(1).strip() if m else ""
+
+
+def project_files(root):
+    try:
+        out = subprocess.run(["git", "-C", str(root), "ls-files"], capture_output=True, text=True,
+                             timeout=MAP_SECONDS)
+        if out.returncode == 0 and out.stdout.strip():
+            return out.stdout.splitlines()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    files = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        files += [os.path.relpath(os.path.join(dirpath, f), root) for f in filenames]
+        if len(files) > MAP_MAX_FILES * 3:
+            break
+    return files
+
+
+def is_test_or_generated(path):
+    parts = path.replace("\\", "/").split("/")
+    name = parts[-1]
+    return (any(p in SKIP_DIRS or p in ("test", "tests", "__tests__", "spec") for p in parts[:-1])
+            or name.startswith("test_") or re.search(r"(_test|\.test|\.spec|\.min)\.\w+$", name) is not None)
+
+
+def code_map(root, budget=MAP_BUDGET):
+    """Mapa curto do código: funções, classes e exports por arquivo, agrupados por pasta.
+    Sem modelo, com teto de caracteres e de tempo. Devolve "" se não houver nada útil."""
+    if budget <= 0 or os.environ.get("TOKEN_PILOT_MAP") == "0":
+        return ""
+    start = time.time()
+    by_dir = {}
+    scanned = 0
+    for rel in project_files(root):
+        if time.time() - start > MAP_SECONDS or scanned >= MAP_MAX_FILES:
+            break
+        ext = os.path.splitext(rel)[1]
+        if ext not in SYMBOL_PATTERNS or is_test_or_generated(rel):
+            continue
+        scanned += 1
+        try:
+            with open(os.path.join(root, rel), encoding="utf-8", errors="ignore") as f:
+                text = f.read(200_000)
+        except OSError:
+            continue
+        names = []
+        for m in re.finditer(SYMBOL_PATTERNS[ext], text, re.M):
+            name = next((g for g in m.groups() if g), None)
+            if name and not name.startswith("_") and name not in names:
+                names.append(name)
+        if names:
+            folder, base = os.path.split(rel)
+            by_dir.setdefault(folder or ".", []).append(f"{base}({', '.join(names[:8])}{', …' if len(names) > 8 else ''})")
+    if not by_dir:
+        return ""
+    header = ("[Token Pilot] Mapa do código (o que já existe; reutilize e abra um arquivo só quando "
+              "precisar dos detalhes):")
+    lines, used = [header], len(header)
+    folders = sorted(by_dir, key=lambda d: (d.count("/"), d))
+    for i, folder in enumerate(folders):
+        line = f"{folder}/: " + "; ".join(by_dir[folder])
+        if used + len(line) + 1 > budget:
+            lines.append(f"… e mais {len(folders) - i} pasta(s); use grep.")
+            break
+        lines.append(line)
+        used += len(line) + 1
+    return "\n".join(lines)
+
+
+def project_root(data):
+    return data.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+
+
+def subagent_context(agent_type, root):
+    kind = (agent_type or "").split(":")[-1].lower()
+    parts = [discipline("leitura" if kind in READ_ONLY_AGENTS else "edição")]
+    if kind in MAP_AGENTS:
+        parts.append(code_map(root))
+    return "\n\n".join(p for p in parts if p)
+
 
 # O que o Claude deve fazer para cada dica (o usuário vê só a dica curta).
 ACTIONS = {
@@ -266,8 +386,8 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS):
         state["level"] = 1
         if was_raised:
             return "resolved", (
-                "Problema resolvido depois de subir de nível. As próximas partes voltam ao "
-                "implementer (Opus 5.5, medium). Se você trocou o modelo à mão, use /model opus e /effort medium."
+                "Problema resolvido depois de subir de nível. As próximas partes voltam para a "
+                "sessão principal (Opus 5.5, medium). Se você trocou o modelo à mão, use /model opus e /effort medium."
             )
         return None, None
 
@@ -305,7 +425,7 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS):
         state["big_task_at"] = state["prompts"]
         return "big_task", (
             "Tarefa grande detectada. O Claude vai dividir em análise (Haiku 5.5/Sonnet 5.5), "
-            "brainstorm (Opus high) e execução (Opus medium, subindo se travar)."
+            "brainstorm (Opus high) e execução na sessão principal (Opus medium, subindo se travar)."
         )
 
     too_long = state["since_compact"] >= PROMPTS_TO_COMPACT or (
@@ -329,9 +449,18 @@ def main():
 
     models, source = resolve_models()
 
-    if data.get("hook_event_name") == "SessionStart":
-        out = {"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                      "additionalContext": session_rules(models, source)}}
+    event = data.get("hook_event_name")
+    if event == "SubagentStart":
+        context = subagent_context(data.get("agent_type") or data.get("subagent_type"), project_root(data))
+        if context:
+            print(json.dumps({"hookSpecificOutput": {"hookEventName": "SubagentStart",
+                                                     "additionalContext": context}}, ensure_ascii=False))
+        return 0
+
+    if event == "SessionStart":
+        context = "\n\n".join(p for p in (session_rules(models, source), discipline("edição"),
+                                           code_map(project_root(data))) if p)
+        out = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
         notice = base_dir() / ".plan-notice"
         if source.startswith("desconhecido") and not notice.exists():
             out["systemMessage"] = ("💡 Token Pilot: não sei qual é o seu plano. Rode "

@@ -23,10 +23,15 @@ A política completa (tabela de decisão, sinais e mensagens prontas) está em
   - `verifier` (Haiku 5.5, low): rodar testes/build/lint e resumir.
    - `researcher` (Sonnet 5.5, medium): pesquisa que exige ler e comparar vários arquivos.
   - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
-  - `implementer` → `implementer-high` → `implementer-fable`: edição, subindo de nível
-    a cada 2 falhas na mesma parte. Nunca delegue edições para Haiku 5.5 ou Sonnet.
+  - `implementer-high` → `implementer-fable`: escalada de uma parte que falhou 2 vezes
+    na sessão principal. `implementer` (medium) só para partes grandes e independentes em
+    paralelo. Nunca delegue edições para Haiku 5.5 ou Sonnet.
+- **Edite na sessão principal.** Ela fica com contexto pequeno porque recebe só resumos, e
+  delegar a edição abre um contexto novo no Opus e relê arquivos, o que custa mais.
+- **Siga a disciplina de resposta** que o hook injeta: a menor mudança que resolve a tarefa
+  inteira. É a maior economia em tokens de saída, que são o custo principal no Opus.
 - **Tarefa grande (analisar + decidir + implementar)?** Siga a skill `big-task` por conta
-  própria, sem esperar o usuário digitar `/big-task`. Edições pequenas e pontuais podem ficar na sessão principal.
+  própria, sem esperar o usuário digitar `/big-task`.
 - **As skills `/boost` e `/escalate` mudam o modelo/effort só enquanto estão ativas**
   (frontmatter `model`/`effort`). Isso é o jeito mais barato de "subir e voltar": a sessão
   volta sozinha ao padrão quando a skill termina.

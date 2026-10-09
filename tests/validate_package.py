@@ -94,6 +94,11 @@ if "big-task" in skills:
 settings = (ROOT / "settings.json").read_text()
 check("token_pilot.py" in settings, "settings.json não registra o hook")
 check((ROOT / "hooks" / "token_pilot.py").exists(), "hook token_pilot.py não existe")
+for event in ("SessionStart", "UserPromptSubmit", "SubagentStart"):
+    check(f'"{event}"' in settings, f"settings.json não registra o hook em {event}")
+disc = (ROOT / "hooks" / "disciplina.md")
+check(disc.exists() and "## edição" in disc.read_text() and "## leitura" in disc.read_text(),
+      "disciplina.md precisa das seções '## edição' e '## leitura'")
 
 if errors:
     print("FALHOU:")

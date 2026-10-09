@@ -8,8 +8,8 @@ argument-hint: "<tarefa> [--auto]"
 
 Tarefa: $ARGUMENTS
 
-Você é a **coordenadora**. Você não lê código em volume nem edita arquivos: você divide a
-tarefa, escolhe o agente de cada parte, mantém o brief e junta os resultados. Assim a
+Você é a **coordenadora**. Você não lê código em volume: delega a leitura, decide com base nos
+resumos, mantém o brief e **edita você mesma**, porque seu contexto fica pequeno. Assim a
 sessão principal fica pequena, nunca troca de modelo (o cache dela não é refeito) e cada
 parte roda no modelo mais barato que dá conta dela.
 
@@ -27,9 +27,12 @@ O effort vem do arquivo do agente, então escolha o agente pela combinação que
 | `verifier` | Haiku 5.5 | low | rodar testes/build/lint e resumir |
 | `researcher` | Sonnet 5.5 | medium | entender um fluxo lendo vários arquivos |
 | `ideator` | Opus 5.5 | high | brainstorm e comparação de opções |
-| `implementer` | Opus 5.5 | medium | editar código (nível padrão) |
-| `implementer-high` | Opus 5.5 | high | parte que falhou 2× no implementer |
+| `implementer` | Opus 5.5 | medium | parte grande e independente, em paralelo (worktree) |
+| `implementer-high` | Opus 5.5 | high | parte que falhou 2× (na sessão principal) |
 | `implementer-fable` | Fable 5.1 | high | parte que falhou 2× no implementer-high |
+
+A edição fica na sessão principal: delegar a um `implementer` abre um contexto novo no Opus,
+paga a gravação dele e relê arquivos, o que custa mais do que editar aqui.
 
 ### Plano do usuário
 
@@ -49,7 +52,8 @@ Regra de escolha para cada parte:
 
 - **Só achar coisas** → `scout`. **Entender como coisas se ligam** → `researcher`.
 - **Decidir entre caminhos** → `ideator`.
-- **Mudar código** → sempre começa no `implementer`. Nunca comece no high ou no Fable.
+- **Mudar código** → você mesma, na sessão principal. `implementer` só para partes grandes e
+  independentes que valha rodar em paralelo. Nunca comece no high ou no Fable.
 - **Conferir** → `verifier`. **Log grande** → `log-reader`.
 - Nunca mande edição para Haiku 5.5 ou Sonnet.
 
@@ -98,18 +102,18 @@ execução com um único `implementer`.
 1. Quebre a decisão em partes pequenas e verificáveis e escreva o Plano no brief.
    Se forem mais de 3 arquivos, ⏸ mostre o plano e peça aprovação (com `--auto`, siga).
 2. Para cada parte, em ordem:
-   1. Chame `implementer` com: número da parte, o que fazer, arquivos prováveis e o
-      comando de verificação.
-   2. Se voltar `OK`, chame `verifier` para confirmar (pule se o implementer já mostrou
-      os testes passando).
-   3. Se falhar, registre em Falhas e aplique a escada:
-      - 2 falhas no `implementer` → `implementer-high`
+   1. Edite você mesma, seguindo a disciplina de resposta (menor mudança completa) e o
+      mapa do código. Abra só os arquivos que a parte toca.
+   2. Chame `verifier` para rodar a verificação e resumir o resultado.
+   3. Se falhar, registre em Falhas e tente de novo. Depois de 2 falhas na mesma parte,
+      aplique a escada:
+      - 2 falhas na sessão principal → `implementer-high`, com o que já falhou
       - 2 falhas no `implementer-high` → `implementer-fable` (só se o plano tiver Fable;
         sem Fable, pare aqui e explique ao usuário o que falta)
       - 2 falhas no `implementer-fable` → pare e explique ao usuário o que falta.
-   4. Voltou OK depois de subir? A próxima parte começa de novo no `implementer`.
-3. Partes que não tocam os mesmos arquivos podem rodar em paralelo com
-   `isolation: "worktree"`. Na dúvida, rode em sequência.
+   4. Resolveu depois de subir? A próxima parte volta para você.
+3. Só delegue partes ao `implementer` quando forem grandes, não tocarem os mesmos arquivos e
+   valer rodar em paralelo (`isolation: "worktree"`). Na dúvida, edite em sequência aqui.
 
 ### 4. Fechamento
 
@@ -117,7 +121,7 @@ Responda ao usuário em até 15 linhas:
 
 - o que foi feito (partes e arquivos),
 - resultado da verificação final,
-- quais níveis foram usados, por exemplo `scout×3, ideator×1, implementer×3, implementer-high×1`,
+- quais agentes foram usados, por exemplo `scout×3, ideator×1, verifier×3, implementer-high×1`,
 - pendências, se houver.
 
 Termine com `💡 Token Pilot: tarefa concluída. Se o próximo pedido não tiver relação, use /clear.`

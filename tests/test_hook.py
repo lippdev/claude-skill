@@ -51,7 +51,7 @@ class TestHook(unittest.TestCase):
         self.assertIn("implementer-high", self.s.send("continua dando o mesmo erro"))
         self.assertIsNone(self.s.send("ainda não funcionou"))
         self.assertIn("implementer-fable", self.s.send("de novo o mesmo erro"))
-        self.assertIn("voltam ao", self.s.send("funcionou, valeu!"))
+        self.assertIn("voltam para a sessão principal", self.s.send("funcionou, valeu!"))
 
     def test_regras_no_inicio_da_sessao(self):
         out = self.s.run(json.dumps({"hook_event_name": "SessionStart", "session_id": "x"}))
@@ -90,7 +90,7 @@ class TestHook(unittest.TestCase):
     def test_nova_parede_depois_de_resolver(self):
         self.s.send("mesmo erro")
         self.assertIsNotNone(self.s.send("mesmo erro"))
-        self.assertIn("voltam ao", self.s.send("resolvido"))  # resolve e zera
+        self.assertIn("voltam para a sessão principal", self.s.send("resolvido"))  # resolve e zera
         self.s.send("mesmo erro")
         self.assertIsNotNone(self.s.send("mesmo erro"))  # nova parede, nova dica
 
@@ -168,6 +168,61 @@ class TestPlano(unittest.TestCase):
         _, ctx = self.regras(TOKEN_PILOT_PLAN="max", CLAUDE_PROJECT_DIR=str(proj.parent))
         self.assertIn("Sonnet 5.5, Opus 5.5 (fonte: plano max (TOKEN_PILOT_PLAN) + availableModels)", ctx)
         self.assertIn('scout -> model: "sonnet"', ctx)
+
+
+class TestDisciplinaEMapa(unittest.TestCase):
+    """SubagentStart, disciplina de resposta e mapa do código."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.proj = Path(self.tmp.name) / "proj"
+        (self.proj / "app").mkdir(parents=True)
+        (self.proj / "tests").mkdir()
+        (self.proj / "app" / "pedidos.py").write_text("def criar_pedido():\n    pass\n\nclass Pedido:\n    pass\n")
+        (self.proj / "app" / "web.ts").write_text("export function rota() {}\nexport const porta = 1\n")
+        (self.proj / "tests" / "test_pedidos.py").write_text("def test_criar():\n    pass\n")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def ctx(self, event, agent=None, **env):
+        s = HookSession(self.tmp.name, **env)
+        payload = {"hook_event_name": event, "session_id": "d", "cwd": str(self.proj)}
+        if agent:
+            payload["agent_type"] = agent
+        out = s.run(json.dumps(payload))
+        return out["hookSpecificOutput"]["additionalContext"] if out else ""
+
+    def test_scout_recebe_disciplina_de_leitura_e_mapa(self):
+        c = self.ctx("SubagentStart", "scout")
+        self.assertIn("leia só o necessário", c)
+        self.assertIn("criar_pedido", c)
+        self.assertNotIn("menor mudança", c)
+
+    def test_implementer_high_recebe_disciplina_de_edicao(self):
+        c = self.ctx("SubagentStart", "implementer-high")
+        self.assertIn("menor mudança", c)
+        self.assertIn("Mapa do código", c)
+
+    def test_log_reader_sem_mapa(self):
+        c = self.ctx("SubagentStart", "log-reader")
+        self.assertIn("leia só o necessário", c)
+        self.assertNotIn("Mapa do código", c)
+
+    def test_agente_de_plugin_usa_nome_sem_prefixo(self):
+        self.assertIn("leia só o necessário", self.ctx("SubagentStart", "token-pilot:scout"))
+
+    def test_mapa_ignora_testes_e_lista_exports(self):
+        c = self.ctx("SessionStart")
+        self.assertIn("web.ts(rota, porta)", c)
+        self.assertNotIn("test_criar", c)
+        self.assertIn("menor mudança", c)
+
+    def test_mapa_desligado_e_teto(self):
+        self.assertNotIn("Mapa do código", self.ctx("SessionStart", TOKEN_PILOT_MAP="0"))
+        c = self.ctx("SessionStart", TOKEN_PILOT_MAP_CHARS="150")
+        mapa = c[c.index("[Token Pilot] Mapa"):]
+        self.assertLessEqual(len(mapa), 150 + 60)
 
 
 if __name__ == "__main__":

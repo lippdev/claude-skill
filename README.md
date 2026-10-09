@@ -30,7 +30,7 @@ troca de modelo (o cache dela não é refeito) e manda cada parte para o agente 
 │
 ├─ Análise     scout ×N (Haiku 5.5, low) em paralelo + researcher (Sonnet 5.5, medium)
 ├─ Brainstorm  ideator (Opus 5.5, high), recebe só o resumo      ⏸ você escolhe
-├─ Execução    implementer (Opus 5.5, medium) por parte
+├─ Execução    na própria sessão principal (Opus 5.5, medium, contexto pequeno)
 │              ├─ 2 falhas → implementer-high (Opus 5.5, high)
 │              └─ 2 falhas → implementer-fable (Fable 5.1, high)
 └─ Conferência verifier (Haiku 5.5, low)
@@ -61,8 +61,8 @@ decisão, plano, falhas, comando de verificação).
 | `verifier` | Haiku 5.5 | low | não | rodar testes e resumir |
 | `researcher` | Sonnet 5.5 | medium | não | entender fluxos |
 | `ideator` | Opus 5.5 | high | não | brainstorm |
-| `implementer` | Opus 5.5 | medium | sim | editar (padrão) |
-| `implementer-high` | Opus 5.5 | high | sim | 2 falhas no implementer |
+| `implementer` | Opus 5.5 | medium | sim | parte grande e independente, em paralelo |
+| `implementer-high` | Opus 5.5 | high | sim | 2 falhas na sessão principal |
 | `implementer-fable` | Fable 5.1 | high | sim | 2 falhas no implementer-high |
 
 O effort de um subagente só pode ser definido no arquivo dele, por isso há um agente por

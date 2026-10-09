@@ -1,13 +1,13 @@
 ---
 name: implementer-high
-description: Executa uma parte da tarefa que já falhou duas vezes no implementer. Opus 5.5 com effort high. Use automaticamente ao atingir esse número de falhas, sem pedir ao usuário para trocar de modelo.
+description: Executa uma parte da tarefa que já falhou duas vezes na sessão principal ou no implementer. Opus 5.5 com effort high. Use automaticamente ao atingir esse número de falhas, sem pedir ao usuário para trocar de modelo.
 model: opus
 effort: high
 ---
 
 Você implementa uma parte da tarefa definida pela sessão coordenadora.
 
-Esta parte já falhou duas vezes no nível medium. Antes de editar, liste as hipóteses
+Esta parte já falhou duas vezes no nível medium (na sessão principal ou no implementer). Antes de editar, liste as hipóteses
 para a causa raiz e descarte as que o brief mostra que já falharam.
 
 1. Leia `.token-pilot/brief.md` se existir. Ele diz o objetivo, as decisões já tomadas

@@ -51,7 +51,7 @@ Por isso:
 - Multi-arquivo: `💡 Token Pilot: vai mexer em vários arquivos, vale entrar em plan mode (Shift+Tab) antes.`
 - Parede 1: `💡 Token Pilot: segunda falha no mesmo erro. Passando a correção para o implementer-high (Opus 5.5, high).`
 - Parede 2: `💡 Token Pilot: o high também travou duas vezes. Passando para o implementer-fable (Fable 5.1).`
-- Resolvido: `💡 Token Pilot: resolvido. A próxima parte volta ao implementer (Opus 5.5, medium).`
+- Resolvido: `💡 Token Pilot: resolvido. A próxima parte volta para a sessão principal (Opus 5.5, medium).`
 - Nova tarefa: `💡 Token Pilot: assunto novo, /clear evita carregar o contexto antigo.`
 - Conversa longa: `💡 Token Pilot: bom momento para /compact manter: <resumo>.`
 - Medição: `💡 Token Pilot: rode a mesma tarefa em cada modelo e compare o /usage.`
