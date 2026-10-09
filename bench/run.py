@@ -59,8 +59,8 @@ ALLOWED_TOOLS = ["Read", "Edit", "Write", "Glob", "Grep", "Agent", "Skill", "Tod
                  "Bash(head *)", "Bash(tail *)", "Bash(wc *)", "Bash(find *)"]
 
 
-def prepare(workdir, arm):
-    shutil.copytree(PROJECT, workdir, ignore=shutil.ignore_patterns("__pycache__", ".token-pilot"))
+def prepare(workdir, arm, project=PROJECT):
+    shutil.copytree(project, workdir, ignore=shutil.ignore_patterns("__pycache__", ".token-pilot"))
     if arm == "token-pilot":
         shutil.copytree(REPO / ".claude", workdir / ".claude",
                         ignore=shutil.ignore_patterns("__pycache__", "settings.local.json"))
@@ -93,7 +93,7 @@ def fake_result(arm, task):
 def run_one(task, arm, args, out):
     with tempfile.TemporaryDirectory(prefix=f"bench-{arm}-") as tmp:
         workdir = Path(tmp) / "projeto"
-        prepare(workdir, arm)
+        prepare(workdir, arm, REPO / task.get("project", "examples/estoque"))
         env = dict(os.environ, TOKEN_PILOT_STATE_DIR=str(Path(tmp) / "estado"))
         if args.plan:
             env["TOKEN_PILOT_PLAN"] = args.plan
@@ -112,6 +112,9 @@ def run_one(task, arm, args, out):
             except ValueError:
                 data, error = {}, (proc.stderr or proc.stdout)[-500:]
         wall = time.time() - start
+        if task.get("hidden"):  # testes ocultos entram só agora, depois do trabalho
+            shutil.copytree(REPO / "bench" / "ocultos" / task["hidden"], workdir / "_ocultos", dirs_exist_ok=True)
+            (workdir / "_ocultos" / "__init__.py").touch()
         check = subprocess.run(["bash", "-c", task["check"]], cwd=workdir, capture_output=True,
                                text=True, timeout=120)
         diff = subprocess.run(["git", "diff", "--shortstat"], cwd=workdir, capture_output=True, text=True)
