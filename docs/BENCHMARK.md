@@ -132,8 +132,31 @@ O que isso mostra:
   qualquer jeito; o pacote só acrescenta ~1,3 mil tokens de contexto fixo. A diferença medida
   (+7% e +14%) está dentro da variação entre rodadas iguais do próprio Opus (US$ 0,139 a
   US$ 0,168 na mesma tarefa).
-- **A economia nas tarefas grandes ainda é estimada.** Ela precisa ser medida num projeto
-  maior, com leitura de verdade.
+- **A economia nas tarefas grandes foi medida depois, no projeto maior** (seção abaixo).
+
+**Tarefas grandes no projeto maior** (`examples/loja-grande`, 45 arquivos, ~2.200 linhas;
+09/10/2026, 1 rodada por braço):
+
+| Tarefa | Opus 5.5 medium | Token Pilot | Custo | Tempo | Turnos | Acertou? |
+|---|---|---|---|---|---|---|
+| `grande-bug` (cupom × promoção, atravessa módulos) | $0.207 · 28 s | $0.163 · 20 s | −21% | −29% | 13 → 6 | sim |
+| `grande-sincronizar` (~2.000 linhas de log) | $0.298 · 42 s | $0.209 · 30 s | −30% | −29% | 12 → 9 | sim |
+| `grande-reembolso` (funcionalidade nova, testes ocultos) | $0.541 · 107 s | $0.551 · 106 s | +2% | −1% | 17 → 19 | sim |
+| **Média geométrica** | | | **−18%** | **−21%** | −27% | 3 de 3 |
+
+O que os registros mostram:
+
+- **A economia veio da disciplina de resposta, não da delegação.** No `grande-bug` e no
+  `grande-sincronizar`, nenhum subagente foi usado: o Opus fez menos turnos e respostas mais
+  curtas. No log, filtrou a saída com `tail`/`grep` por conta própria em vez de chamar o
+  `log-reader`.
+- **No `grande-reembolso`, o hook detectou a tarefa grande, mas o Claude não seguiu o
+  `big-task`.** Implementou direto, chamou só o `verifier`, e custou o mesmo que o uso normal.
+  Neste tamanho de projeto (~25 mil tokens de código), ler tudo no Opus ainda é barato, e a
+  delegação não tem muito o que economizar.
+- **Uma rodada por braço ainda é pouco.** Rodadas iguais do próprio Opus variaram até ~20% nas
+  tarefas curtas. A direção (−18% de custo e −21% de tempo, com os mesmos acertos) é
+  consistente com a estimativa, mas o número exato precisa de mais rodadas.
 
 ## Premissas principais
 
