@@ -341,12 +341,17 @@ MECHANICAL_PATTERNS = [
     r"\b(formata|indenta|reformat)\w*\b", r"\bmov(e|er|a) .{1,60}\bpara\b",
 ]
 SHORT_PROMPT_CHARS = int(os.environ.get("TOKEN_PILOT_SHORT_PROMPT_CHARS", "160"))
+# Pedido curto, mas que pede para construir ou medir algo: não é tarefa curta.
+BUILD_PATTERNS = [
+    r"\b(implement|constru|desenvolv|mont[ae]|cri[ae]r?\b|refator|migr|integr|med[ei]r?\b|benchmark)",
+    r"\b(implement|build|create|refactor|migrat|integrat|measure|benchmark)",
+]
 
 QUICK_CONTEXT = ("[Token Pilot] Tarefa mecânica: delegue ao subagente quick-edit (Haiku 5.5) com a instrução "
                  "exata, sem ler os arquivos antes. Ele já confere o resultado e separa falhas que já existiam: se "
                  "devolver OK, não verifique de novo e responda em 1 linha. Se devolver PRECISA_OPUS ou FALHOU, faça você mesmo.")
-SHORT_CONTEXT = ("[Token Pilot] Tarefa curta: resolva direto, sem subagentes, sem plano e sem resumo; leia só "
-                 "o necessário e responda em até 3 linhas.")
+SHORT_CONTEXT = ("[Token Pilot] Tarefa curta: resolva direto, sem plano e sem resumo; leia só o necessário e "
+                 "responda em até 3 linhas. Só use subagente para ler saída longa (log-reader).")
 
 
 def task_kind(prompt):
@@ -356,7 +361,7 @@ def task_kind(prompt):
         return "grande"
     if len(text) <= 300 and matches(MECHANICAL_PATTERNS, text):
         return "mecanica"
-    if len(text) <= SHORT_PROMPT_CHARS:
+    if len(text) <= SHORT_PROMPT_CHARS and not matches(BUILD_PATTERNS, text):
         return "curta"
     return "media"
 

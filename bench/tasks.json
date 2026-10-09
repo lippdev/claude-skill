@@ -22,5 +22,27 @@
     "kind": "grande",
     "prompt": "Analisa o projeto, corrige os testes que falham e implementa um alerta de reposição: um comando `reposicao` no cli que lista, para cada produto no mínimo ou abaixo dele, quantas unidades comprar para chegar ao dobro do mínimo. Escolha você mesmo o melhor desenho, sem me perguntar, e adicione testes.",
     "check": "python3 -m unittest -q && python3 -m estoque.cli reposicao | grep -q CAF-001"
+  },
+  {
+    "id": "grande-bug",
+    "kind": "grande",
+    "project": "examples/loja-grande",
+    "prompt": "O fechamento de pedido está calculando o desconto do cupom errado quando o pedido também tem promoção. Investiga o fluxo de cálculo e corrige a causa, sem mudar os testes.",
+    "check": "python3 -m unittest -q"
+  },
+  {
+    "id": "grande-sincronizar",
+    "kind": "log",
+    "project": "examples/loja-grande",
+    "prompt": "Roda python3 tools/sincronizar.py, descobre por que ele quebra no meio e corrige para que todos os produtos do export sejam sincronizados, sem editar o arquivo de dados.",
+    "check": "python3 tools/sincronizar.py | tail -1 | grep -q 'Sincronizados: 300 de 300'"
+  },
+  {
+    "id": "grande-reembolso",
+    "kind": "grande",
+    "project": "examples/loja-grande",
+    "hidden": "reembolso",
+    "prompt": "Analisa o projeto e implementa reembolso parcial de pedidos: um método reembolsar(pedido_id, itens) no ServicoPedidos, onde itens é um dict {sku: quantidade}. Ele devolve os itens ao estoque, estorna pelo pagamento original o valor pago por esses itens (com promoção e cupom já descontados; o frete não volta), marca o pedido como \"reembolsado_parcial\", avisa o cliente e devolve o valor estornado. Não deixe reembolsar mais do que foi comprado nem pedido que não está pago. Escolha você mesmo o desenho, sem me perguntar, e adicione testes.",
+    "check": "python3 -m unittest discover -s _ocultos -t . -q"
   }
 ]
