@@ -1,23 +1,26 @@
 # Benchmark estimado: Opus 5.5 medium (uso normal) x Token Pilot
 
 > **Estimativa, não medição.** Os números vêm de `tests/benchmark_estimate.py`, um modelo
-> turno a turno com premissas explícitas no código. A medição real vem do plano em
-> `examples/estoque/PLANO-DE-TESTE.md` e do relatório de `tests/session_report.py`.
+> turno a turno com premissas explícitas no código. A medição real vem de `bench/run.py`
+> (seção "Medir de verdade" abaixo).
 
 **O que está sendo comparado:**
 
 - **Opus 5.5 medium (uso normal):** uma sessão só, no Opus 5.5 com effort `medium`, que lê,
   pensa, edita e testa tudo sozinha. Ninguém troca `/model` nem `/effort`.
-- **Token Pilot:** a mesma sessão principal (Opus 5.5 `medium`) coordena e delega cada função
-  a um subagente:
+- **Token Pilot:** a mesma sessão principal (Opus 5.5 `medium`) delega o que é barato de
+  delegar e edita ela mesma:
 
-| Função | Subagente |
+| Função | Quem faz no Token Pilot |
 |---|---|
 | Análise | `scout` e `log-reader` (Haiku 5.5, `low`) e `researcher` (Sonnet 5.5, `medium`) |
 | Brainstorm | `ideator` (Opus 5.5, `high`) |
-| Execução | `implementer` (Opus 5.5, `medium`), um por parte |
+| Execução | a própria sessão principal, que fica com contexto pequeno porque só recebe resumos |
 | Verificação | `verifier` (Haiku 5.5, `low`) |
-| Escalada, se travar | `implementer-high` (Opus 5.5, `high`) |
+| Escalada, se travar | `implementer-high` (Opus 5.5, `high`) e depois `implementer-fable` |
+
+Todos seguem a disciplina de resposta, que pede a menor mudança que resolve a tarefa
+inteira, e recebem um mapa do código.
 
 Recalcule com:
 
@@ -26,94 +29,91 @@ python3 tests/benchmark_estimate.py          # tabelas
 python3 tests/benchmark_estimate.py --json   # dados
 ```
 
-
 Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa no limite de uso). Tempo é o de espera do usuário, sem contar quanto ele demora para responder.
 
 ## Cenário esperado
 
 | Situação | Opus 5.5 medium | Token Pilot | Custo | Tempo |
 |---|---|---|---|---|
-| Pedido simples (renomear uma função) | $0.204 · 0.8 min | $0.213 · 0.8 min | +4% | +0% |
-| Tarefa grande (analisar, corrigir, propor e implementar) | $1.369 · 6.8 min | $1.355 · 9.3 min | -1% | +38% |
-| Log de CI longo + 10 turnos de trabalho seguinte | $0.695 · 2.4 min | $0.425 · 2.6 min | -39% | +9% |
-| Bug difícil que o medium demora a resolver | $1.287 · 6.1 min | $1.175 · 6.3 min | -9% | +4% |
-| **Dia típico** (8x simples, 2x grande, 2x log, 1x trava) | $7.04 · 31 min | $6.44 · 37 min | -9% | +19% |
+| Pedido simples (renomear uma função) | $0.204 · 0.8 min | $0.219 · 0.8 min | +7% | +0% |
+| Tarefa grande (analisar, corrigir, propor e implementar) | $1.369 · 6.8 min | $0.892 · 5.6 min | -35% | -17% |
+| Log de CI longo + 10 turnos de trabalho seguinte | $0.695 · 2.4 min | $0.357 · 1.9 min | -49% | -20% |
+| Bug difícil que o medium demora a resolver | $1.287 · 6.1 min | $0.959 · 3.9 min | -26% | -35% |
+| **Dia típico** (8x simples, 2x grande, 2x log, 1x trava) | $7.04 · 31 min | $5.21 · 25 min | -26% | -18% |
 
 ## Tarefa grande: custo por função (cenário esperado)
 
 | Função | Opus 5.5 medium | Token Pilot | Quem faz no Token Pilot |
 |---|---|---|---|
-| Análise | $0.578 | $0.327 | 3 scouts (Haiku 5.5) + researcher (Sonnet 5.5) |
-| Brainstorm | $0.084 | $0.271 | ideator (Opus 5.5, high) |
-| Execução | $0.572 | $0.699 | 3 implementers (Opus 5.5, medium) |
-| Verificação | $0.082 | $0.034 | 2 verifiers (Haiku 5.5) |
-| Coordenação | $0.052 | $0.024 | sessão principal (resumo final) |
+| Análise | $0.578 | $0.307 | 3 scouts (Haiku 5.5) + researcher (Sonnet 5.5) |
+| Brainstorm | $0.084 | $0.191 | ideator (Opus 5.5, high) |
+| Execução | $0.572 | $0.329 | sessão principal, com a disciplina de resposta |
+| Verificação | $0.082 | $0.043 | 2 verifiers (Haiku 5.5) |
+| Coordenação | $0.052 | $0.021 | sessão principal (resumo final) |
 
 ## Faixa (pessimista · esperado · otimista para o Token Pilot)
 
 | Situação | Variação de custo | Variação de tempo |
 |---|---|---|
-| Pedido simples (renomear uma função) | +5% · +4% · +4% | +0% · +0% · +0% |
-| Tarefa grande (analisar, corrigir, propor e implementar) | +21% · -1% · -15% | +38% · +38% · +38% |
-| Log de CI longo + 10 turnos de trabalho seguinte | -27% · -39% · -47% | +9% · +9% · +9% |
-| Bug difícil que o medium demora a resolver | +23% · -9% · -28% | +40% · +4% · -17% |
-| Dia típico | +8% · -9% · -20% | +25% · +19% · +13% |
+| Pedido simples (renomear uma função) | +8% · +7% · +7% | +0% · +0% · +0% |
+| Tarefa grande (analisar, corrigir, propor e implementar) | -19% · -35% · -46% | -9% · -17% · -24% |
+| Log de CI longo + 10 turnos de trabalho seguinte | -36% · -49% · -57% | -13% · -20% · -25% |
+| Bug difícil que o medium demora a resolver | +3% · -26% · -43% | -2% · -35% · -55% |
+| Dia típico | -12% · -26% · -36% | -7% · -18% · -27% |
 
-## Leitura dos resultados
+## De onde vem cada parte do ganho
 
-**Onde a delegação economiza:**
-- **Leitura grande (log, muitos arquivos):** −39% no log. A leitura vai para o Haiku 5.5,
-  e a sessão principal recebe só um resumo, em vez de carregar o log nos turnos seguintes.
-- **Análise e verificação na tarefa grande:** −43% e −59%.
-- **Bug difícil:** −9% no esperado. O high resolve com menos tentativas do que o medium
-  insistindo numa sessão de contexto grande. Isso depende muito de quantas tentativas o
-  medium leva: no cenário pessimista (3 tentativas), o Token Pilot sai 23% mais caro; no
-  otimista (5 tentativas), 28% mais barato.
+| Tarefa grande (esperado) | Custo | Tempo |
+|---|---|---|
+| Só a estrutura (delegar leitura, editar na sessão principal) | −16% | +18% |
+| Estrutura + disciplina de resposta | −35% | −17% |
 
-**Onde a delegação custa mais:**
-- **Brainstorm:** mais de três vezes o custo. O `ideator` roda em `high`, com mais
-  raciocínio, e abre um contexto novo no Opus. É uma escolha de qualidade, não de economia.
-- **Execução:** +22%. Cada `implementer` abre um contexto novo no Opus, paga a gravação
-  dele e relê arquivos que a análise já tinha lido.
-- **Pedido simples:** +4%, pelas regras do hook e as descrições dos agentes no contexto.
+| Dia típico (esperado) | Custo | Tempo |
+|---|---|---|
+| Só a estrutura | −13% | +10% |
+| Estrutura + disciplina de resposta | −26% | −18% |
 
-**Saldo:**
-- **Tarefa grande:** quase empata no custo (−1%, de +21% a −15%).
-- **Dia típico:** −9% (de +8% a −20%).
-
-## Tempo
-
-- **Tarefa grande:** o Token Pilot fica ~38% mais lento. Cada subagente tem a própria
-  espera até o primeiro token e começa sem contexto. Os scouts rodam em paralelo, mas os
-  implementers rodam um depois do outro.
-- **Log e bug difícil:** quase o mesmo tempo.
-- **Dia típico:** +19%, sem contar o tempo que você leva para responder a pausa do
-  brainstorm.
+- **A estrutura economiza na leitura e na verificação.** O Haiku 5.5 lê no lugar do Opus,
+  e a sessão principal recebe só resumos. Sozinha, porém, ela deixa o trabalho mais lento:
+  cada subagente tem a própria espera até o primeiro token.
+- **A disciplina de resposta corta o que o Opus escreve.** No Opus 5.5, as respostas e o
+  raciocínio são o custo principal e o que mais demora. É ela que transforma o tempo extra
+  em ganho.
+- **A redução de saída da disciplina não foi medida por nós.** O fator usado (−35% a −54%
+  de tokens de saída) vem do benchmark do ponytail no Opus 5.5 (39 tarefas, 5 rodadas;
+  `benchmarks/results/2026-10-07-agentic.md` naquele repositório). A nossa disciplina é um
+  texto próprio, mais curto, e pode render menos.
 
 ## Parte funcional
 
 | Aspecto | Opus 5.5 medium (uso normal) | Token Pilot |
 |---|---|---|
-| Pedido simples | Resolve direto | Igual |
-| Análise de código | O Opus lê tudo e tem todos os detalhes à mão | O Haiku 5.5 resume; risco de um resumo deixar passar um detalhe |
+| Pedido simples | Resolve direto | Igual; ~7% mais caro pelo contexto extra do pacote |
+| Análise de código | O Opus lê tudo e tem os detalhes à mão | O Haiku 5.5 resume e há um mapa do código; risco de um resumo deixar passar um detalhe |
 | Brainstorm | No meio da conversa, em `medium`, sem pausa | O `ideator` compara opções em `high` e você escolhe antes da edição |
-| Edição | Opus com todo o contexto da conversa | Opus, mas o `implementer` só vê o brief; risco de perder contexto |
-| Verificação | Quando o Claude lembra de rodar os testes | O `verifier` roda depois de cada parte |
+| Edição | Opus com todo o contexto, que cresce | Opus com contexto pequeno; segue a menor mudança completa |
+| Verificação | Quando o Claude lembra | O `verifier` roda depois de cada parte |
 | Bug difícil | Continua no `medium`; pode não resolver | Sobe para `high` e depois Fable, se o plano tiver |
-| Contexto longo | A sessão cresce e pede `/compact` mais cedo | A sessão principal cresce devagar, porque recebe só resumos |
+| Tamanho da mudança | O que o modelo achar melhor | Menor diff completo; nunca corta validação, segurança ou o que foi pedido |
 
-**Ganhos funcionais:** brainstorm mais cuidadoso, verificação sistemática e escalada
-automática.
+**Riscos funcionais:**
+- **Resumos do Haiku 5.5:** podem perder detalhes.
+- **Disciplina de resposta:** pode deixar de fora algo útil que ninguém pediu. Ela lista no
+  fim o que ficou de fora.
+- **Pausa do brainstorm:** exige uma resposta sua.
 
-**Riscos funcionais:** resumos do Haiku 5.5 que perdem detalhes, o implementer sem a
-conversa e mais espera. A Sessão 2 do plano de teste mede esses riscos.
+## Medir de verdade
 
-## O que dá para melhorar no Token Pilot
+`bench/run.py` roda as mesmas tarefas no Claude Code sem interface (`claude -p`), em pastas
+limpas, com e sem o pacote, e compara custo, tempo, turnos e se os testes passam. Veja
+`bench/README.md`.
 
-O modelo aponta a execução como o maior custo extra. Executar as partes na sessão principal,
-que com o pacote tem contexto pequeno, e deixar os implementers só para a escalada levaria
-a tarefa grande de −1% para cerca de −17% (de −3% a −27%) e diminuiria a espera. Isso muda
-o desenho de "um subagente por função" e ainda não foi feito.
+**Primeira rodada real** (09/10/2026, Claude Code 2.1.295, tarefa "renomear", 1 rodada por
+braço, repetida 2 vezes): os dois braços acertaram. O Token Pilot custou +6% e +27%: o
+contexto inicial é ~2,5 mil tokens maior e houve um turno a mais. Com uma rodada só, a
+diferença entre as duas ainda é ruído; ela só confirma que, em pedido simples, o pacote
+custa um pouco mais. As tarefas grandes, onde está a economia estimada, ainda não foram
+medidas.
 
 ## Premissas principais
 
@@ -126,10 +126,12 @@ o desenho de "um subagente por função" e ainda não foi feito.
 - **Planos Pro e Max:** não há cobrança por token, mas o consumo pesa no limite de uso de
   forma parecida. As porcentagens valem como ordem de grandeza.
 - **Tokenizador:** o Haiku 5.5 conta ~30% mais tokens para o mesmo texto.
-- **Contextos iniciais:** a sessão principal começa com 18 a 22 mil tokens; cada
-  subagente, com 7 a 12 mil.
+- **Contextos iniciais:** a sessão principal começa com 18 a 22 mil tokens, mais ~2,5 mil
+  do pacote; cada subagente, com 7 a 12 mil, mais ~400 de disciplina e mapa.
 - **Tamanho da tarefa grande:** 14 leituras de ~3,5 mil tokens, 3 partes de edição e
   2 execuções da suíte de testes.
 - **Bug difícil:** o Opus 5.5 `medium` leva de 3 a 5 tentativas; o `high` resolve na primeira.
+- **Saída do Opus com a disciplina:** 65% / 55% / 46% da saída normal, nos cenários
+  pessimista, esperado e otimista.
 - **Velocidade de saída:** Haiku 5.5 a 250 tokens/s, Sonnet 5.5 a 120, Opus 5.5 a 70 e
   Fable 5.1 a 45. A espera até o primeiro token vai de 0,8 a 4 s.

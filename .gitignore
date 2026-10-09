@@ -1,2 +1,3 @@
 .token-pilot/
 __pycache__/
+bench/results/*-fake.jsonl

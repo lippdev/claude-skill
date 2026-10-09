@@ -1,0 +1,56 @@
+# Benchmark real: Opus 5.5 medium x Token Pilot
+
+Roda as mesmas tarefas no Claude Code sem interface (`claude -p`), cada uma numa cópia limpa
+de `examples/estoque`, e compara custo, tempo, turnos e se a verificação da tarefa passa.
+
+| Braço | O que roda |
+|---|---|
+| `opus-medium` | Sessão única no Opus 5.5 com effort `medium`, sem o pacote |
+| `token-pilot` | A mesma sessão com a pasta `.claude/` do pacote |
+| `ponytail` (opcional) | Sem o pacote, com o plugin do ponytail (`--ponytail <pasta>`) |
+
+As tarefas estão em `bench/tasks.json`. Cada uma tem um pedido e um comando de verificação
+que só passa se o trabalho foi feito.
+
+| Tarefa | Tipo | Verificação |
+|---|---|---|
+| `renomear` | simples | a função nova existe e o nome antigo sumiu do código e dos testes |
+| `corrigir-testes` | grande | `python3 -m unittest` passa |
+| `simulador` | log | `python3 simular.py` roda até o fim |
+| `reposicao` | grande | testes passam e `python3 -m estoque.cli reposicao` lista o CAF-001 |
+
+## Rodar
+
+```bash
+python3 bench/run.py run --dry-run                 # mostra os comandos, sem gastar nada
+python3 bench/run.py run --fake --runs 2           # testa o pipeline com respostas simuladas
+python3 bench/run.py run --runs 3 --plan pro       # benchmark de verdade
+python3 bench/run.py run --runs 3 --ponytail ~/ponytail   # com o terceiro braço
+python3 bench/run.py compare bench/results/<arquivo>.jsonl
+```
+
+**Custo:** a rodada completa (4 tarefas × 2 braços × 3 rodadas = 24 sessões) deve ficar
+entre US$ 15 e US$ 30 em preço de API, ou o equivalente no limite de uso do plano. Cada sessão
+tem teto de US$ 3 (`--max-budget`). Para começar barato, use `--tasks corrigir-testes --runs 1`.
+
+## Como funciona
+
+- **Isolamento:** cada rodada é uma pasta temporária nova com `git init`, e as configurações do
+  usuário não são carregadas (`--setting-sources project,local`).
+- **Permissões:** só a edição de arquivos e alguns comandos de leitura e teste (`python3`,
+  `git`, `grep`...) são liberados.
+- **Ordem:** os braços são intercalados, para que mudanças de carga no servidor afetem os
+  dois por igual.
+- **Resultado:** cada sessão vira uma linha em `bench/results/<data>.jsonl`, com o custo por
+  modelo.
+- **Comparação:** para cada tarefa, usa a mediana das rodadas; entre tarefas, a média
+  geométrica das razões contra o `opus-medium`. É o mesmo método do benchmark do ponytail.
+
+## Limites
+
+- **Custo informado:** `total_cost_usd` é a estimativa do próprio Claude Code, não a cobrança.
+- **Pausa do brainstorm:** no modo sem interface ninguém responde, então os pedidos das tarefas
+  grandes dizem para o Claude decidir sozinho.
+- **O que não é isolado:** um `CLAUDE.md` ou agentes em `~/.claude/` ainda podem ser
+  carregados. Rode numa máquina sem eles, ou confira com `tests/session_report.py`.
+- **Poucas tarefas:** 4 tarefas num projeto pequeno dão uma direção, não um número definitivo.

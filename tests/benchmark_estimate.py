@@ -3,10 +3,10 @@
 
 - **Opus 5.5 medium (uso normal):** uma sessão só, no Opus 5.5 com effort medium, que lê,
   pensa, edita e testa tudo sozinha. Ninguém troca /model nem /effort.
-- **Token Pilot:** a sessão principal (Opus 5.5 medium) coordena e delega cada função a um
-  subagente: scout e log-reader (Haiku 5.5, low), researcher (Sonnet 5.5, medium), ideator
-  (Opus 5.5, high), implementer (Opus 5.5, medium) por parte, verifier (Haiku 5.5, low) e,
-  se travar, implementer-high (Opus 5.5, high).
+- **Token Pilot:** a sessão principal (Opus 5.5 medium) delega a leitura (scout e log-reader
+  no Haiku 5.5, researcher no Sonnet 5.5), o brainstorm (ideator, Opus 5.5 high) e a
+  verificação (verifier, Haiku 5.5), e edita ela mesma, com contexto pequeno. Se travar,
+  sobe para o implementer-high (Opus 5.5 high). Todos seguem a disciplina de resposta.
 
 Não é medição. É um modelo turno a turno com premissas explícitas (todas abaixo), para
 comparar os dois jeitos de trabalhar e para recalcular quando houver dados reais do
@@ -44,20 +44,24 @@ TOOL_SECONDS = 1.5  # execução média de uma ferramenta (ler arquivo, rodar te
 # Três cenários de premissas. "esperado" é o central; os outros dão a faixa.
 # "pessimista" é o menos favorável ao Token Pilot.
 ASSUMPTIONS = {
-    "pessimista": {"main_base": 18_000, "sub_base": 12_000, "read_scale": 0.6, "reread": 1.0,
-                   "medium_attempts": 3},
-    "esperado":   {"main_base": 20_000, "sub_base": 9_000,  "read_scale": 1.0, "reread": 0.6,
-                   "medium_attempts": 4},
-    "otimista":   {"main_base": 22_000, "sub_base": 7_000,  "read_scale": 1.4, "reread": 0.4,
-                   "medium_attempts": 5},
+    "pessimista": {"main_base": 18_000, "sub_base": 12_000, "read_scale": 0.6,
+                   "medium_attempts": 3, "out_factor": 0.65},
+    "esperado":   {"main_base": 20_000, "sub_base": 9_000,  "read_scale": 1.0,
+                   "medium_attempts": 4, "out_factor": 0.55},
+    "otimista":   {"main_base": 22_000, "sub_base": 7_000,  "read_scale": 1.4,
+                   "medium_attempts": 5, "out_factor": 0.46},
 }
 # main_base: prompt de sistema + ferramentas + CLAUDE.md da sessão principal.
 # sub_base:  o mesmo para cada subagente (menor que o da sessão principal).
 # read_scale: quanto código/log a tarefa exige ler (1.0 = projeto médio).
-# reread: fração dos arquivos que o implementer relê porque não viu a análise.
+# out_factor: saída do Opus com a disciplina de resposta, em relação ao uso normal. Vem do
+#   intervalo medido pelo ponytail no Opus 5.5 (-45% de saída, IC 95% de -35% a -54%;
+#   benchmarks/results/2026-10-07-agentic.md). A redução de turnos medida lá (-22%) não
+#   entra no modelo, para não exagerar.
 # medium_attempts: tentativas que o Opus 5.5 medium leva, sozinho, para resolver um bug
 #   difícil que o effort high resolve na primeira (o Token Pilot sobe para o high na 3ª).
-TOKEN_PILOT_OVERHEAD = 1_500   # regras do hook + descrições das skills e agentes
+TOKEN_PILOT_OVERHEAD = 2_500   # regras, disciplina e mapa do hook + descrições das skills e agentes
+SUB_OVERHEAD = 400             # disciplina e mapa injetados em cada subagente
 BIG_TASK_SKILL = 3_000         # corpo da skill big-task, carregado quando ela roda
 
 PHASES = ["análise", "brainstorm", "execução", "verificação", "coordenação"]
@@ -66,8 +70,9 @@ PHASES = ["análise", "brainstorm", "execução", "verificação", "coordenaçã
 class Run:
     """Um agente (sessão principal ou subagente) rodando turno a turno."""
 
-    def __init__(self, model, base, phase="coordenação"):
+    def __init__(self, model, base, phase="coordenação", out_factor=1.0):
         self.model = model
+        self.out_factor = out_factor if model in ("opus", "fable") else 1.0
         self.phase = phase
         k = TOKENIZER[model]
         self.ctx = base * k
@@ -79,7 +84,7 @@ class Run:
 
     def turn(self, out, result=0, tool=True):
         k, p = TOKENIZER[self.model], PRICES[self.model]
-        out_t, res_t = out * k, result * k
+        out_t, res_t = out * k * self.out_factor, result * k
         read = self.ctx - self.pending_write
         cost = (read * p["cr"] + self.pending_write * p["cw"] + out_t * p["out"]) / 1e6
         self.cost += cost
@@ -120,7 +125,9 @@ def total(runs, parallel_groups=()):
 
 def simple_task(a, pilot):
     """Pedido simples: renomear uma função e atualizar os usos (2-3 arquivos).
-    Com o Token Pilot, a edição pontual fica na sessão principal; só paga as regras."""
+    Com o Token Pilot, a edição pontual fica na sessão principal e só paga o contexto extra.
+    A disciplina de resposta não reduz nada aqui: as respostas de uma renomeação já são
+    mínimas (confirmado na rodada real de bench/run.py)."""
     main = Run("opus", a["main_base"] + (TOKEN_PILOT_OVERHEAD if pilot else 0), "execução")
     main.turns(5, out=300, result=1_500)
     main.turn(250, tool=False)
@@ -139,28 +146,24 @@ def big_task(a, pilot):
         main.at("coordenação").turn(700, tool=False)            # resumo final
         return total([main])
 
-    main = Run("opus", a["main_base"] + TOKEN_PILOT_OVERHEAD + BIG_TASK_SKILL, "análise")
+    f, sub = a["out_factor"], a["sub_base"] + SUB_OVERHEAD
+    main = Run("opus", a["main_base"] + TOKEN_PILOT_OVERHEAD + BIG_TASK_SKILL, "análise", f)
     main.turn(800)                                    # escreve o brief
     main.turn(600, result=3 * 700)                    # dispara 3 scouts, recebe resumos
     main.turn(300, result=900)                        # researcher
     main.turn(900)                                    # atualiza o brief
     main.at("brainstorm").turn(300, result=1_200)     # ideator
     main.turn(700, result=100, tool=False)            # mostra opções, recebe a escolha
-    main.at("execução").turns(3, out=350, result=600)  # 3 implementers
+    main.at("execução").turns(12, out=900, result=1_500)  # edita na própria sessão
     main.at("verificação").turns(2, out=200, result=400)  # 2 verifiers
     main.at("coordenação").turn(700, tool=False)       # resumo final
 
     reading = 14 * 3_500 * s * 1.3                   # leitura total, com 30% de sobreposição
-    scouts = [Run("haiku", a["sub_base"], "análise").turns(6, out=250, result=reading / 3 / 6)
-              for _ in range(3)]
-    researcher = Run("sonnet", a["sub_base"], "análise").turns(5, out=500, result=3_000 * s)
-    ideator = Run("opus", a["sub_base"] + 3_000, "brainstorm").turns(2, out=3_500, result=1_500)
-    reread = 4_000 * s * a["reread"]
-    implementers = [Run("opus", a["sub_base"] + 2_000, "execução").turns(5, out=900, result=1_500 + reread / 5)
-                    for _ in range(3)]
-    verifiers = [Run("haiku", a["sub_base"], "verificação").turns(2, out=150, result=2_000)
-                 for _ in range(2)]
-    runs = [main, *scouts, researcher, ideator, *implementers, *verifiers]
+    scouts = [Run("haiku", sub, "análise").turns(6, out=250, result=reading / 3 / 6) for _ in range(3)]
+    researcher = Run("sonnet", sub, "análise").turns(5, out=500, result=3_000 * s)
+    ideator = Run("opus", sub + 3_000, "brainstorm", f).turns(2, out=3_500, result=1_500)
+    verifiers = [Run("haiku", sub, "verificação").turns(2, out=150, result=2_000) for _ in range(2)]
+    runs = [main, *scouts, researcher, ideator, *verifiers]
     return total(runs, parallel_groups=[scouts])
 
 
@@ -168,7 +171,8 @@ def log_task(a, pilot):
     """Entender por que um job quebrou num log de CI de ~40 mil tokens, e seguir trabalhando
     mais 10 turnos na mesma sessão (o log continua no contexto se foi lido na sessão)."""
     log = 40_000 * a["read_scale"]
-    main = Run("opus", a["main_base"] + (TOKEN_PILOT_OVERHEAD if pilot else 0), "análise")
+    main = Run("opus", a["main_base"] + (TOKEN_PILOT_OVERHEAD if pilot else 0), "análise",
+               a["out_factor"] if pilot else 1.0)
     runs = [main]
     if not pilot:
         main.turn(300, result=log)                    # lê o log inteiro
@@ -176,7 +180,7 @@ def log_task(a, pilot):
     else:
         main.turn(300, result=450)                    # recebe o resumo do log-reader
         main.turns(2, out=600, result=1_000)
-        runs.append(Run("haiku", a["sub_base"], "análise").turns(4, out=200, result=2_500))
+        runs.append(Run("haiku", a["sub_base"] + SUB_OVERHEAD, "análise").turns(4, out=200, result=2_500))
     main.at("execução").turns(10, out=500, result=1_500)  # trabalho seguinte na mesma sessão
     return total(runs)
 
@@ -184,7 +188,7 @@ def log_task(a, pilot):
 def stuck_task(a, pilot):
     """Bug difícil numa sessão que já vinha trabalhando (+40 mil tokens de contexto).
     Uso normal: o Opus 5.5 medium tenta sozinho até resolver, com você avisando a cada falha.
-    Token Pilot: 2 tentativas no implementer (medium), depois o implementer-high resolve."""
+    Token Pilot: 2 tentativas na sessão principal, depois o implementer-high resolve."""
     if not pilot:
         main = Run("opus", a["main_base"] + 40_000, "execução")
         for i in range(a["medium_attempts"]):
@@ -192,14 +196,15 @@ def stuck_task(a, pilot):
             if i < a["medium_attempts"] - 1:
                 main.turn(400, result=300)            # você diz que ainda falha
         return total([main])
-    main = Run("opus", a["main_base"] + 40_000 + TOKEN_PILOT_OVERHEAD, "execução")
-    main.turns(2, out=350, result=600)                # 2 implementers
-    main.turn(400, result=800)                        # implementer-high
+    f = a["out_factor"]
+    main = Run("opus", a["main_base"] + 40_000 + TOKEN_PILOT_OVERHEAD, "execução", f)
+    main.turns(5, out=900, result=1_500)              # 1ª tentativa na sessão principal
+    main.turn(400, result=300)                        # ainda falha
+    main.turns(5, out=900, result=1_500)              # 2ª tentativa
+    main.turn(400, result=800)                        # delega ao implementer-high
     main.at("coordenação").turn(300, tool=False)
-    tries = [Run("opus", a["sub_base"] + 2_500, "execução").turns(5, out=900, result=1_500)
-             for _ in range(2)]
-    high = Run("opus", a["sub_base"] + 3_500, "execução").turns(5, out=2_200, result=1_500)
-    return total([main, *tries, high])
+    high = Run("opus", a["sub_base"] + SUB_OVERHEAD + 3_500, "execução", f).turns(5, out=2_200, result=1_500)
+    return total([main, high])
 
 
 SCENARIOS = [
@@ -250,7 +255,7 @@ def markdown(data):
     lines += ["", "## Tarefa grande: custo por função (cenário esperado)", "",
               "| Função | Opus 5.5 medium | Token Pilot | Quem faz no Token Pilot |", "|---|---|---|---|"]
     who = {"análise": "3 scouts (Haiku 5.5) + researcher (Sonnet 5.5)", "brainstorm": "ideator (Opus 5.5, high)",
-           "execução": "3 implementers (Opus 5.5, medium)", "verificação": "2 verifiers (Haiku 5.5)",
+           "execução": "sessão principal, com a disciplina de resposta", "verificação": "2 verifiers (Haiku 5.5)",
            "coordenação": "sessão principal (resumo final)"}
     for ph in PHASES:
         b, p = g["base"]["by_phase"].get(ph, 0), g["pilot"]["by_phase"].get(ph, 0)
