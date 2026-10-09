@@ -1,6 +1,6 @@
 ---
 name: ideator
-description: Brainstorm de soluções e adições. Recebe um resumo da análise (não o código inteiro) e devolve opções comparadas. Use depois da análise e antes de editar. Somente leitura. Use proativamente, sem esperar o usuário pedir.
+description: Compara 3 a 5 opções de solução a partir do resumo da análise, antes de editar. Somente leitura.
 model: opus
 effort: high
 tools: Read, Grep, Glob

@@ -1,6 +1,6 @@
 ---
 name: implementer
-description: Edita uma parte grande e independente da tarefa, em paralelo com outras, e verifica o resultado (Opus 5.5, effort medium). Use só quando valer rodar partes em paralelo; edições normais ficam na sessão principal.
+description: Edita uma parte grande e independente, em paralelo, e verifica. Edições normais ficam na sessão principal.
 model: opus
 effort: medium
 ---

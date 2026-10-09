@@ -1,6 +1,6 @@
 ---
 name: token-pilot
-description: Escolhe o modelo e o nível de esforço (effort) certos para cada momento da sessão para gastar menos tokens. Use no início de uma tarefa nova, quando o usuário travar no mesmo problema, quando for delegar busca ou leitura de logs, quando a conversa estiver longa, ou quando o usuário perguntar como economizar tokens, qual modelo ou effort usar, ou mencionar /model, /effort, /usage, /compact ou /clear.
+description: Escolhe modelo, effort e subagente para gastar menos tokens. Use ao começar uma tarefa, quando algo travar, ao delegar busca, logs ou testes, em conversa longa, ou quando o usuário falar de tokens, custo, /model, /effort, /usage, /compact ou /clear.
 ---
 
 # Token Pilot

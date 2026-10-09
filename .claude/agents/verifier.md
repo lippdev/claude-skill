@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Roda testes, build e lint e resume o resultado. Use depois de cada execução para conferir sem gastar a sessão principal. Não edita código. Use proativamente, sem esperar o usuário pedir.
+description: Roda suítes de teste, build ou lint longas ou lentas e resume o resultado. Não edita.
 model: haiku
 effort: low
 tools: Read, Grep, Glob, Bash

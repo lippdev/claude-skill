@@ -122,6 +122,8 @@ def cmd_run(args):
         wanted = set(args.tasks.split(","))
         tasks = [t for t in tasks if t["id"] in wanted]
     arms = ["opus-medium", "token-pilot"] + (["ponytail"] if args.ponytail else [])
+    if args.arms:
+        arms = [a for a in args.arms.split(",") if a in arms]
     if not args.dry_run and not args.fake and shutil.which("claude") is None:
         print("Não achei o comando `claude` no PATH.")
         return 1
@@ -143,8 +145,9 @@ def geomean(values):
     return math.exp(sum(math.log(v) for v in values) / len(values)) if values else None
 
 
-def compare(path):
-    rows = [json.loads(line) for line in open(path, encoding="utf-8") if line.strip()]
+def compare(*paths):
+    rows = [json.loads(line) for path in paths for line in open(path, encoding="utf-8") if line.strip()]
+    path = Path(paths[-1])
     arms = sorted({r["arm"] for r in rows}, key=lambda a: (a != "opus-medium", a))
     tasks = sorted({r["task"] for r in rows})
     med = {}
@@ -189,6 +192,7 @@ def main():
     r.add_argument("--tasks", help="ids separados por vírgula (padrão: todas)")
     r.add_argument("--model", default="opus")
     r.add_argument("--effort", default="medium")
+    r.add_argument("--arms", help="braços separados por vírgula (padrão: todos)")
     r.add_argument("--plan", help="plano para o Token Pilot (pro, max, team, enterprise, api)")
     r.add_argument("--ponytail", help="pasta do plugin ponytail, para incluir o terceiro braço")
     r.add_argument("--max-budget", type=float, default=3.0, help="teto em US$ por rodada (padrão 3)")
@@ -196,10 +200,10 @@ def main():
     r.add_argument("--dry-run", action="store_true", help="só mostra os comandos")
     r.add_argument("--fake", action="store_true", help="simula as respostas, sem chamar o modelo")
     c = sub.add_parser("compare", help="resume um arquivo de resultados")
-    c.add_argument("path")
+    c.add_argument("paths", nargs="+", help="um ou mais arquivos .jsonl")
     args = ap.parse_args()
     if args.cmd == "compare":
-        compare(Path(args.path))
+        compare(*[Path(p) for p in args.paths])
         return 0
     return cmd_run(args)
 

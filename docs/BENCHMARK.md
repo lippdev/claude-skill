@@ -15,7 +15,7 @@
 |---|---|
 | Análise | `scout` e `log-reader` (Haiku 5.5, `low`) e `researcher` (Sonnet 5.5, `medium`) |
 | Brainstorm | `ideator` (Opus 5.5, `high`) |
-| Execução | a própria sessão principal, que fica com contexto pequeno porque só recebe resumos |
+| Execução | a própria sessão principal, que fica com contexto pequeno porque só recebe resumos; mudança mecânica vai para o `quick-edit` (Haiku 5.5) |
 | Verificação | `verifier` (Haiku 5.5, `low`) |
 | Escalada, se travar | `implementer-high` (Opus 5.5, `high`) e depois `implementer-fable` |
 
@@ -35,19 +35,20 @@ Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa n
 
 | Situação | Opus 5.5 medium | Token Pilot | Custo | Tempo |
 |---|---|---|---|---|
-| Pedido simples (renomear uma função) | $0.204 · 0.8 min | $0.219 · 0.8 min | +7% | +0% |
-| Tarefa grande (analisar, corrigir, propor e implementar) | $1.369 · 6.8 min | $0.892 · 5.6 min | -35% | -17% |
-| Log de CI longo + 10 turnos de trabalho seguinte | $0.695 · 2.4 min | $0.357 · 1.9 min | -49% | -20% |
-| Bug difícil que o medium demora a resolver | $1.287 · 6.1 min | $0.959 · 3.9 min | -26% | -35% |
-| **Dia típico** (8x simples, 2x grande, 2x log, 1x trava) | $7.04 · 31 min | $5.21 · 25 min | -26% | -18% |
+| Pedido mecânico (renomear uma função) | $0.204 · 0.8 min | $0.133 · 0.9 min | -35% | +11% |
+| Pedido curto que exige investigar | $0.244 · 1.2 min | $0.252 · 1.2 min | +3% | +0% |
+| Tarefa grande (analisar, corrigir, propor e implementar) | $1.369 · 6.8 min | $0.889 · 5.6 min | -35% | -17% |
+| Log de CI longo + 10 turnos de trabalho seguinte | $0.695 · 2.4 min | $0.348 · 1.9 min | -50% | -20% |
+| Bug difícil que o medium demora a resolver | $1.287 · 6.1 min | $0.950 · 3.9 min | -26% | -35% |
+| **Dia típico** (4x simples, 4x curta, 2x grande, 2x log, 1x trava) | $7.20 · 32 min | $4.96 · 27 min | -31% | -16% |
 
 ## Tarefa grande: custo por função (cenário esperado)
 
 | Função | Opus 5.5 medium | Token Pilot | Quem faz no Token Pilot |
 |---|---|---|---|
-| Análise | $0.578 | $0.307 | 3 scouts (Haiku 5.5) + researcher (Sonnet 5.5) |
+| Análise | $0.578 | $0.305 | 3 scouts (Haiku 5.5) + researcher (Sonnet 5.5) |
 | Brainstorm | $0.084 | $0.191 | ideator (Opus 5.5, high) |
-| Execução | $0.572 | $0.329 | sessão principal, com a disciplina de resposta |
+| Execução | $0.572 | $0.328 | sessão principal, com a disciplina de resposta |
 | Verificação | $0.082 | $0.043 | 2 verifiers (Haiku 5.5) |
 | Coordenação | $0.052 | $0.021 | sessão principal (resumo final) |
 
@@ -55,11 +56,12 @@ Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa n
 
 | Situação | Variação de custo | Variação de tempo |
 |---|---|---|
-| Pedido simples (renomear uma função) | +8% · +7% · +7% | +0% · +0% · +0% |
+| Pedido mecânico (renomear uma função) | -36% · -35% · -34% | +11% · +11% · +11% |
+| Pedido curto que exige investigar | +4% · +3% · +3% | +0% · +0% · +0% |
 | Tarefa grande (analisar, corrigir, propor e implementar) | -19% · -35% · -46% | -9% · -17% · -24% |
-| Log de CI longo + 10 turnos de trabalho seguinte | -36% · -49% · -57% | -13% · -20% · -25% |
-| Bug difícil que o medium demora a resolver | +3% · -26% · -43% | -2% · -35% · -55% |
-| Dia típico | -12% · -26% · -36% | -7% · -18% · -27% |
+| Log de CI longo + 10 turnos de trabalho seguinte | -38% · -50% · -58% | -13% · -20% · -25% |
+| Bug difícil que o medium demora a resolver | +2% · -26% · -44% | -2% · -35% · -55% |
+| Dia típico | -18% · -31% · -40% | -5% · -16% · -25% |
 
 ## De onde vem cada parte do ganho
 
@@ -71,7 +73,7 @@ Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa n
 | Dia típico (esperado) | Custo | Tempo |
 |---|---|---|
 | Só a estrutura | −13% | +10% |
-| Estrutura + disciplina de resposta | −26% | −18% |
+| Estrutura + disciplina de resposta | −31% | −16% |
 
 - **A estrutura economiza na leitura e na verificação.** O Haiku 5.5 lê no lugar do Opus,
   e a sessão principal recebe só resumos. Sozinha, porém, ela deixa o trabalho mais lento:
@@ -88,7 +90,8 @@ Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa n
 
 | Aspecto | Opus 5.5 medium (uso normal) | Token Pilot |
 |---|---|---|
-| Pedido simples | Resolve direto | Igual; ~7% mais caro pelo contexto extra do pacote |
+| Pedido mecânico | O Opus lê, edita e confere | O `quick-edit` (Haiku 5.5) edita e confere; o Opus só despacha e responde |
+| Pedido curto que exige investigar | Resolve direto | Igual, com a instrução de resolver direto; ~3% mais caro pelo contexto fixo |
 | Análise de código | O Opus lê tudo e tem os detalhes à mão | O Haiku 5.5 resume e há um mapa do código; risco de um resumo deixar passar um detalhe |
 | Brainstorm | No meio da conversa, em `medium`, sem pausa | O `ideator` compara opções em `high` e você escolhe antes da edição |
 | Edição | Opus com todo o contexto, que cresce | Opus com contexto pequeno; segue a menor mudança completa |
@@ -108,24 +111,29 @@ Custo em dólares equivalentes à API (em planos Pro/Max, o mesmo consumo pesa n
 limpas, com e sem o pacote, e compara custo, tempo, turnos e se os testes passam. Veja
 `bench/README.md`.
 
-**Rodadas reais até agora** (09/10/2026, Claude Code 2.1.295, 1 rodada por braço; ainda é
-pouco para tirar números, mas já mostra a direção):
+**Rodadas reais até agora** (09/10/2026, Claude Code 2.1.295; ainda é pouco para tirar
+números firmes, mas já mostra a direção):
 
-| Tarefa | Opus 5.5 medium | Token Pilot | Custo | Tempo | Os dois acertaram? |
+| Tarefa | Opus 5.5 medium | Token Pilot | Custo | Tempo | Acertou? |
 |---|---|---|---|---|---|
-| `renomear` (2 rodadas) | $0.168 e $0.139 | $0.178 e $0.177 | +6% e +27% | −9% e +11% | sim |
-| `corrigir-testes` | $0.188 · 25 s | $0.202 · 40 s | +7% | +60% | sim |
+| `renomear`, primeira versão (2 rodadas) | $0.168 e $0.139 · 26 e 22 s | $0.178 e $0.177 | +6% e +27% | −9% e +11% | sim |
+| `renomear`, versão final com `quick-edit` (2 rodadas) | mesma base | $0.093 e $0.085 · 26 e 18 s | **cerca de −40%** | igual ou menor | sim |
+| `corrigir-testes` (pedido curto, 2 rodadas) | $0.188 · 25 s | $0.202 e $0.215 | +7% e +14% | +60% e +8% | sim |
 
 O que isso mostra:
 
-- **Num projeto pequeno, o pacote ainda não economiza.** As tarefas custaram US$ 0,14 a
-  US$ 0,20, bem menos que a "tarefa grande" da estimativa (US$ 1,37). Não há leitura grande
-  para tirar do Opus, e sobra o custo fixo de ~2,5 mil tokens de contexto.
-- **A chamada ao `verifier` atrasou a correção em ~15 s** para rodar um teste de menos de um
-  segundo. Depois disso, testes curtos passaram a rodar na própria sessão, e o `verifier`
-  ficou para suítes longas ou lentas.
-- **A economia estimada depende de tarefas maiores.** Ela ainda precisa ser medida num
-  projeto maior, com leitura de verdade, antes de ser tratada como fato.
+- **Pedido mecânico agora economiza.** O hook reconhece "renomear", "trocar texto",
+  "corrigir typo", "ajustar import", e a mudança vai para o `quick-edit` (Haiku 5.5). O Opus
+  só despacha e responde em uma linha: foram 2 turnos do Opus contra 6 a 7 sem o pacote.
+- **Dois ajustes fizeram a diferença nessas rodadas.** O Opus parou de refazer a conferência
+  que o `quick-edit` já tinha feito, e o `quick-edit` passou a separar sozinho os testes que já
+  falhavam antes da mudança; sem isso, o Opus gastava 6 turnos investigando.
+- **Pedido curto que exige investigar fica perto do neutro.** O Opus precisa investigar de
+  qualquer jeito; o pacote só acrescenta ~1,3 mil tokens de contexto fixo. A diferença medida
+  (+7% e +14%) está dentro da variação entre rodadas iguais do próprio Opus (US$ 0,139 a
+  US$ 0,168 na mesma tarefa).
+- **A economia nas tarefas grandes ainda é estimada.** Ela precisa ser medida num projeto
+  maior, com leitura de verdade.
 
 ## Premissas principais
 

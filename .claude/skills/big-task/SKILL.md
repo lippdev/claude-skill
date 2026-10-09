@@ -1,6 +1,6 @@
 ---
 name: big-task
-description: Coordena uma tarefa grande dividindo-a em análise, brainstorm e execução, e manda cada parte para um subagente com o modelo e o effort adequados (Haiku 5.5, Sonnet 5.5, Opus 5.5 ou Fable 5.1). Use quando o usuário pedir uma tarefa que exige entender o código, decidir o que fazer e depois implementar, ou quando ele digitar /big-task.
+description: Coordena uma tarefa grande (analisar, decidir e implementar): leitura no Haiku 5.5 e Sonnet 5.5, brainstorm no Opus 5.5 high, edição na sessão principal. Use também quando o usuário digitar /big-task.
 argument-hint: "<tarefa> [--auto]"
 ---
 
@@ -27,6 +27,7 @@ O effort vem do arquivo do agente, então escolha o agente pela combinação que
 | `verifier` | Haiku 5.5 | low | rodar testes/build/lint e resumir |
 | `researcher` | Sonnet 5.5 | medium | entender um fluxo lendo vários arquivos |
 | `ideator` | Opus 5.5 | high | brainstorm e comparação de opções |
+| `quick-edit` | Haiku 5.5 | medium | parte mecânica: renomear, trocar texto, ajustar imports |
 | `implementer` | Opus 5.5 | medium | parte grande e independente, em paralelo (worktree) |
 | `implementer-high` | Opus 5.5 | high | parte que falhou 2× (na sessão principal) |
 | `implementer-fable` | Fable 5.1 | high | parte que falhou 2× no implementer-high |
@@ -55,7 +56,8 @@ Regra de escolha para cada parte:
 - **Mudar código** → você mesma, na sessão principal. `implementer` só para partes grandes e
   independentes que valha rodar em paralelo. Nunca comece no high ou no Fable.
 - **Conferir** → `verifier`. **Log grande** → `log-reader`.
-- Nunca mande edição para Haiku 5.5 ou Sonnet.
+- **Parte mecânica** (renomear, trocar texto, ajustar imports) → `quick-edit`. Fora disso,
+  nunca mande edição para Haiku 5.5 ou Sonnet.
 
 ## Brief: a memória compartilhada
 

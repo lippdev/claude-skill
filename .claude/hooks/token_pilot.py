@@ -82,6 +82,7 @@ MODEL_NAMES = {"haiku": "Haiku 5.5", "sonnet": "Sonnet 5.5", "opus": "Opus 5.5",
 AGENT_MODELS = {
     "scout": "haiku", "log-reader": "haiku", "verifier": "haiku", "researcher": "sonnet",
     "ideator": "opus", "implementer": "opus", "implementer-high": "opus", "implementer-fable": "fable",
+    "quick-edit": "haiku",
 }
 FALLBACKS = {"haiku": ["sonnet", "opus"], "sonnet": ["opus", "haiku"], "opus": ["sonnet"], "fable": []}
 
@@ -178,46 +179,36 @@ def model_for(agent, models):
 
 
 def session_rules(models, source):
+    """Núcleo curto de regras para toda sessão. O resto (disciplina de edição, mapa do código,
+    instruções da tarefa) entra pelo UserPromptSubmit só quando a tarefa pede."""
     names = ", ".join(MODEL_NAMES[m] for m in models) or "nenhum"
     has_fable = model_for("implementer-fable", models) is not None
-    ladder = ("falhou 2x nele -> implementer-fable." if has_fable else
-              "falhou 2x nele -> pare, resuma o que falhou e peça ajuda ao usuário (o plano não tem Fable; não use /escalate).")
+    ladder = ("2x nele -> implementer-fable" if has_fable else
+              "2x nele -> pare e peça ajuda (sem Fable no plano; não use /escalate)")
     lines = [
-        "[Token Pilot] Regras desta sessão (aplique sem esperar comando do usuário):",
-        f"- Modelos do plano do usuário: {names} (fonte: {source}).",
-        "- Busca/localização de código -> subagente scout. Logs/CI -> log-reader.",
-        "  Suíte de testes longa ou lenta -> verifier; teste curto, rode você mesmo com a saída filtrada (tail).",
-        "  Entender um fluxo em vários arquivos -> researcher (Sonnet 5.5, medium).",
-        "- Tarefa grande (analisar + decidir + implementar, ou vários arquivos) -> siga a skill",
-        "  big-task automaticamente: análise com scouts em paralelo, brainstorm no ideator,",
-        "  execução na própria sessão principal, verificação no verifier.",
-        "- Edite na sessão principal: ela fica com contexto pequeno porque só recebe resumos.",
-        "  implementer só para partes grandes e independentes que possam rodar em paralelo.",
-        f"- Mesma parte falhou 2x -> delegue ao implementer-high; {ladder}",
-        "  Resolveu -> volte a editar na sessão principal. Nunca peça ao usuário para trocar /model ou /effort.",
-        "- Assunto novo sem relação -> sugira /clear. Conversa longa num intervalo -> sugira /compact com nota.",
-        "- Instalado como plugin, os agentes têm prefixo (token-pilot:scout); use o nome completo ao chamá-los.",
+        "[Token Pilot] Regras (aplique sem esperar comando):",
+        f"- Modelos do plano: {names} (fonte: {source}).",
+        "- Mudança mecânica -> quick-edit (Haiku 5.5). Busca -> scout. Log longo -> log-reader.",
+        "  Suíte de testes longa -> verifier. Fluxo em vários arquivos -> researcher (Sonnet 5.5).",
+        "- Tarefa grande -> skill big-task. Edite na sessão principal; implementer só para partes",
+        "  grandes em paralelo.",
+        f"- Mesma parte falhou 2x -> implementer-high; {ladder}. Nunca peça para trocar /model ou /effort.",
+        "- Assunto novo -> sugira /clear. Como plugin, os agentes têm prefixo (token-pilot:scout).",
     ]
-    overrides = []
-    for agent, wanted in AGENT_MODELS.items():
-        got = model_for(agent, models)
-        if got and got != wanted:
-            overrides.append(f"{agent} -> model: \"{got}\"")
+    overrides = [f"{agent} -> model: \"{got}\"" for agent, wanted in AGENT_MODELS.items()
+                 if (got := model_for(agent, models)) and got != wanted]
     if overrides:
-        lines.append("- Modelos fora do plano: ao chamar estes agentes, passe o parâmetro model: "
-                     + "; ".join(overrides) + ".")
-    lines.append("- Se um subagente falhar porque o modelo não está disponível, trate esse modelo como "
-                  "indisponível pelo resto da sessão e passe model com o substituto (Haiku 5.5 -> Sonnet 5.5, "
-                  "Sonnet 5.5 -> Opus, Opus -> Sonnet 5.5). Se for o Fable, encerre a escada e peça ajuda ao usuário.")
-    lines.append("- Agente no Haiku 5.5 recusou ou voltou vazio -> refaça a mesma parte com model: \"sonnet\" "
-                 "(o Haiku 5.5 não tem fallback automático para recusas).")
+        lines.append("- Fora do plano, passe model: " + "; ".join(overrides) + ".")
+    lines.append("- Modelo indisponível num subagente -> use o substituto (Haiku 5.5 -> Sonnet 5.5, "
+                 "Sonnet 5.5 -> Opus, Opus -> Sonnet 5.5); sem Fable, pare a escada e peça ajuda. "
+                 "Haiku 5.5 recusou ou voltou vazio -> refaça com model: \"sonnet\".")
     return "\n".join(lines)
 
 # ---------------------------------------------------------------- disciplina e mapa
 
 HOOK_DIR = Path(__file__).resolve().parent
 # Agentes que só leem recebem a disciplina curta; os demais, a de edição.
-READ_ONLY_AGENTS = {"scout", "log-reader", "verifier", "researcher", "ideator", "explore", "plan"}
+READ_ONLY_AGENTS = {"scout", "log-reader", "verifier", "researcher", "ideator", "explore", "plan", "quick-edit"}
 # Agentes que recebem o mapa do código (os que leem ou editam código, não logs).
 MAP_AGENTS = {"scout", "researcher", "ideator", "implementer", "implementer-high", "implementer-fable",
               "general-purpose", "explore", "plan"}
@@ -340,6 +331,36 @@ ACTIONS = {
 }
 
 
+# Pedidos mecânicos: dá para fazer sem decidir lógica.
+MECHANICAL_PATTERNS = [
+    r"\brenome(ia|ar|ie)\b", r"\brename\b",
+    r"\btroc(a|ar|ue)\b.{1,60}\bpor\b", r"\bsubstitu(i|ir|a)\b", r"\breplace\b",
+    r"\btypo\b", r"\berro de (digitação|ortografia)\b", r"\bortografia\b",
+    r"\b(atualiz|mud|alter)\w* (o |a |os |as )?(texto|mensagem|label|string|constante|url|link|vers[aã]o|t[ií]tulo|nome)\b",
+    r"\b(adicion|remov|tir)\w* (o |os |um |uns )?(imports?|coment[aá]rios?|prints?|console\.logs?|logs? de debug)\b",
+    r"\b(formata|indenta|reformat)\w*\b", r"\bmov(e|er|a) .{1,60}\bpara\b",
+]
+SHORT_PROMPT_CHARS = int(os.environ.get("TOKEN_PILOT_SHORT_PROMPT_CHARS", "160"))
+
+QUICK_CONTEXT = ("[Token Pilot] Tarefa mecânica: delegue ao subagente quick-edit (Haiku 5.5) com a instrução "
+                 "exata, sem ler os arquivos antes. Ele já confere o resultado e separa falhas que já existiam: se "
+                 "devolver OK, não verifique de novo e responda em 1 linha. Se devolver PRECISA_OPUS ou FALHOU, faça você mesmo.")
+SHORT_CONTEXT = ("[Token Pilot] Tarefa curta: resolva direto, sem subagentes, sem plano e sem resumo; leia só "
+                 "o necessário e responda em até 3 linhas.")
+
+
+def task_kind(prompt):
+    """Classe do pedido: "grande", "mecanica", "curta" ou "media"."""
+    text = prompt.strip()
+    if is_big_task(text):
+        return "grande"
+    if len(text) <= 300 and matches(MECHANICAL_PATTERNS, text):
+        return "mecanica"
+    if len(text) <= SHORT_PROMPT_CHARS:
+        return "curta"
+    return "media"
+
+
 def is_big_task(prompt):
     if matches(MULTI_FILE_PATTERNS, prompt):
         return True
@@ -460,8 +481,7 @@ def main():
         return 0
 
     if event == "SessionStart":
-        context = "\n\n".join(p for p in (session_rules(models, source), discipline("edição"),
-                                           code_map(project_root(data))) if p)
+        context = session_rules(models, source)
         out = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
         notice = base_dir() / ".plan-notice"
         if source.startswith("desconhecido") and not notice.exists():
@@ -487,25 +507,41 @@ def main():
         state["last_hint"] = key
     state["updated_at"] = int(time.time())
 
+    extra = task_context(state, prompt, key, project_root(data))
     try:
         path.write_text(json.dumps(state))
     except OSError:
         pass
 
-    if not hint:
+    if not hint and not extra:
         return 0
-
-    print(json.dumps({
-        "systemMessage": f"💡 Token Pilot: {hint}",
-        "hookSpecificOutput": {
-            "hookEventName": "UserPromptSubmit",
-            "additionalContext": (
-                f"[Token Pilot] {' '.join(filter(None, [hint, ACTIONS.get(key)]))} A detecção é heurística: "
-                "confira pelo histórico real da conversa antes de agir."
-            ),
-        },
-    }, ensure_ascii=False))
+    parts = []
+    if hint:
+        parts.append(f"[Token Pilot] {' '.join(filter(None, [hint, ACTIONS.get(key)]))} A detecção é "
+                     "heurística: confira pelo histórico real da conversa antes de agir.")
+    parts += extra
+    out = {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": "\n\n".join(parts)}}
+    if hint:
+        out["systemMessage"] = f"💡 Token Pilot: {hint}"
+    print(json.dumps(out, ensure_ascii=False))
     return 0
+
+
+def task_context(state, prompt, key, root):
+    """Contexto silencioso conforme o tamanho da tarefa. Disciplina de edição e mapa do código
+    entram uma vez por sessão, só quando a tarefa é média ou grande."""
+    if (key in ("boost", "escalate", "stuck", "resolved") or prompt.strip().startswith("/")
+            or matches(STALL_PATTERNS, prompt) or matches(RESOLVED_PATTERNS, prompt)):
+        return []
+    kind = task_kind(prompt)
+    if kind == "mecanica":
+        return [QUICK_CONTEXT]
+    if kind == "curta":
+        return [SHORT_CONTEXT]
+    if state.get("work_context_sent"):
+        return []
+    state["work_context_sent"] = True
+    return [p for p in (discipline("edição"), code_map(root)) if p]
 
 
 def cli(args):

@@ -23,6 +23,7 @@
     "./.claude/agents/implementer-high.md",
     "./.claude/agents/implementer.md",
     "./.claude/agents/log-reader.md",
+    "./.claude/agents/quick-edit.md",
     "./.claude/agents/researcher.md",
     "./.claude/agents/scout.md",
     "./.claude/agents/verifier.md"

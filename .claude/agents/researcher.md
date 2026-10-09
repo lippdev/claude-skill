@@ -1,6 +1,6 @@
 ---
 name: researcher
-description: Pesquisa que exige ler e comparar vários arquivos, como entender um fluxo ou como um módulo é usado. Sonnet 5.5 é mais capaz que o scout e mais barato que a sessão principal. Somente leitura. Use proativamente, sem esperar o usuário pedir.
+description: Entende um fluxo que passa por vários arquivos e devolve a conclusão com evidências. Somente leitura.
 model: sonnet
 effort: medium
 tools: Read, Grep, Glob, Bash

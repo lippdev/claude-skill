@@ -1,6 +1,6 @@
 ---
 name: scout
-description: Busca rápida e barata no código. Use para localizar arquivos, símbolos, definições, usos e padrões de nome. Somente leitura. Use proativamente, sem esperar o usuário pedir.
+description: Localiza arquivos, funções e usos no código. Busca rápida e barata, somente leitura.
 model: haiku
 effort: low
 tools: Read, Grep, Glob, Bash

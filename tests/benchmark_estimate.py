@@ -60,7 +60,7 @@ ASSUMPTIONS = {
 #   entra no modelo, para não exagerar.
 # medium_attempts: tentativas que o Opus 5.5 medium leva, sozinho, para resolver um bug
 #   difícil que o effort high resolve na primeira (o Token Pilot sobe para o high na 3ª).
-TOKEN_PILOT_OVERHEAD = 2_500   # regras, disciplina e mapa do hook + descrições das skills e agentes
+TOKEN_PILOT_OVERHEAD = 1_300   # regras curtas do hook + descrições das skills e agentes (medido)
 SUB_OVERHEAD = 400             # disciplina e mapa injetados em cada subagente
 BIG_TASK_SKILL = 3_000         # corpo da skill big-task, carregado quando ela roda
 
@@ -124,13 +124,27 @@ def total(runs, parallel_groups=()):
 # ---------------------------------------------------------------- cenários
 
 def simple_task(a, pilot):
-    """Pedido simples: renomear uma função e atualizar os usos (2-3 arquivos).
-    Com o Token Pilot, a edição pontual fica na sessão principal e só paga o contexto extra.
-    A disciplina de resposta não reduz nada aqui: as respostas de uma renomeação já são
-    mínimas (confirmado na rodada real de bench/run.py)."""
+    """Pedido simples e mecânico: renomear uma função e atualizar os usos (2-3 arquivos).
+    Com o Token Pilot, o hook manda a mudança para o quick-edit (Haiku 5.5), que edita e confere;
+    o Opus só despacha e responde em 1 linha (2 turnos, como nas rodadas reais de bench/run.py)."""
+    if not pilot:
+        main = Run("opus", a["main_base"], "execução")
+        main.turns(5, out=300, result=1_500)
+        main.turn(250, tool=False)
+        return total([main])
+    main = Run("opus", a["main_base"] + TOKEN_PILOT_OVERHEAD, "execução")
+    main.turn(340, result=500)                        # despacha e recebe o relatório
+    main.at("coordenação").turn(150, tool=False)      # responde em 1 linha
+    quick = Run("haiku", a["sub_base"] + SUB_OVERHEAD, "execução").turns(9, out=400, result=1_500)
+    return total([main, quick])
+
+
+def short_task(a, pilot):
+    """Pedido curto que exige investigar (ex.: "por que este teste falha?"). O Token Pilot só
+    acrescenta o contexto fixo e a instrução de resolver direto; o trabalho é o mesmo."""
     main = Run("opus", a["main_base"] + (TOKEN_PILOT_OVERHEAD if pilot else 0), "execução")
-    main.turns(5, out=300, result=1_500)
-    main.turn(250, tool=False)
+    main.turns(7, out=350, result=1_200)
+    main.turn(300, tool=False)
     return total([main])
 
 
@@ -147,7 +161,7 @@ def big_task(a, pilot):
         return total([main])
 
     f, sub = a["out_factor"], a["sub_base"] + SUB_OVERHEAD
-    main = Run("opus", a["main_base"] + TOKEN_PILOT_OVERHEAD + BIG_TASK_SKILL, "análise", f)
+    main = Run("opus", a["main_base"] + TOKEN_PILOT_OVERHEAD + BIG_TASK_SKILL + 900, "análise", f)  # + disciplina e mapa
     main.turn(800)                                    # escreve o brief
     main.turn(600, result=3 * 700)                    # dispara 3 scouts, recebe resumos
     main.turn(300, result=900)                        # researcher
@@ -208,13 +222,14 @@ def stuck_task(a, pilot):
 
 
 SCENARIOS = [
-    ("simples", "Pedido simples (renomear uma função)", simple_task),
+    ("simples", "Pedido mecânico (renomear uma função)", simple_task),
+    ("curta", "Pedido curto que exige investigar", short_task),
     ("grande", "Tarefa grande (analisar, corrigir, propor e implementar)", big_task),
     ("log", "Log de CI longo + 10 turnos de trabalho seguinte", log_task),
     ("trava", "Bug difícil que o medium demora a resolver", stuck_task),
 ]
 # Mix de um dia de trabalho, em número de ocorrências de cada cenário.
-DAY_MIX = {"simples": 8, "grande": 2, "log": 2, "trava": 1}
+DAY_MIX = {"simples": 4, "curta": 4, "grande": 2, "log": 2, "trava": 1}
 
 
 def compute():
