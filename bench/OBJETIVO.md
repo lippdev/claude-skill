@@ -18,10 +18,12 @@ onde fica neutro e onde piora, e se a qualidade se mantém em cada caso.
 | Braço | O que roda |
 |---|---|
 | `opus-medium` | Claude Code no Opus 5.5, effort `medium`, sem o pacote. É o uso normal. |
-| `token-pilot` | A mesma sessão, com a pasta `.claude/` do pacote: hook, skills, agentes e disciplina. |
+| `token-pilot` | Opus 5.5 com effort `low` na sessão principal, com a pasta `.claude/` do pacote: hook, skills, agentes e disciplina. A sessão principal só coordena; o trabalho vai para os subagentes. |
 
-A sessão principal é igual nos dois braços: mesmo modelo, mesmo effort, mesmo pedido e o
-mesmo projeto de partida. Assim, qualquer diferença vem do pacote.
+Os dois braços recebem o mesmo pedido, no mesmo projeto de partida, com o mesmo modelo na
+sessão principal. O effort é diferente de propósito: quem usa o pacote pode deixar a sessão
+principal em `low`, porque ela só divide a tarefa e despacha; o raciocínio pesado fica nos
+subagentes. A comparação mede esse uso real contra o uso normal (`--pilot-effort` muda isso).
 
 ## O que cada parte do pacote deveria trazer
 

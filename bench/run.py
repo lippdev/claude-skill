@@ -2,13 +2,13 @@
 """Benchmark real: Opus 5.5 medium (uso normal) x Token Pilot, no Claude Code sem interface.
 
 Cada rodada copia o projeto de exemplo para uma pasta temporária limpa, roda uma tarefa com
-`claude -p ... --output-format json` e, no fim, executa a verificação da tarefa. Os dois
-braços usam o mesmo modelo e o mesmo effort na sessão principal; a única diferença é a
-pasta `.claude/` do Token Pilot.
+`claude -p ... --output-format stream-json` e, no fim, executa a verificação da tarefa. Os
+braços usam o mesmo modelo na sessão principal; o Token Pilot coordena em effort low e
+delega o trabalho aos subagentes do pacote.
 
 Braços:
-  opus-medium   sessão única no Opus 5.5 medium, sem o pacote
-  token-pilot   a mesma sessão com a pasta .claude/ do pacote
+  opus-medium   uso normal: sessão única no Opus 5.5 medium, sem o pacote
+  token-pilot   Opus 5.5 low coordenando, com a pasta .claude/ do pacote (--pilot-effort)
   ponytail      opcional: sem o pacote, com o plugin do ponytail (--ponytail <pasta>)
 
 Custa tokens de verdade. Use --dry-run para ver os comandos e --fake para testar o
@@ -71,9 +71,14 @@ def prepare(workdir, arm, project=PROJECT):
         subprocess.run(cmd, cwd=workdir, check=True)
 
 
+def arm_effort(args, arm):
+    """Effort da sessão principal: o Token Pilot só coordena, então roda mais baixo."""
+    return args.pilot_effort if arm == "token-pilot" else args.effort
+
+
 def claude_cmd(prompt, args, arm):
     cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose", "--model", args.model,
-           "--effort", args.effort, "--permission-mode", "acceptEdits",
+           "--effort", arm_effort(args, arm), "--permission-mode", "acceptEdits",
            "--setting-sources", "project,local", "--max-budget-usd", str(args.max_budget),
            "--allowedTools", *ALLOWED_TOOLS]
     if arm == "ponytail":
@@ -187,6 +192,7 @@ def run_one(task, arm, args, out, transcripts=None):
             "turns": data.get("num_turns"), "subtype": data.get("subtype"), "is_error": data.get("is_error"),
             "passed": check.returncode == 0, "diff": diff.stdout.strip(),
             "models": models, "error": error, "fake": bool(args.fake), "version": PACKAGE_VERSION,
+            "effort": arm_effort(args, arm),
         }
         status = "ok" if row["passed"] else "FALHOU"
         cost = f"${row['cost']:.3f}" if row["cost"] is not None else "sem custo"
@@ -219,7 +225,7 @@ def cmd_run(args):
     jobs = [(t, arm) for _ in range(args.runs) for t in tasks for arm in arms]
     # Transcritos completos ficam fora do git (são grandes); servem para ver onde os turnos foram.
     transcripts = path.with_suffix("") if args.transcripts else None
-    with open(path, "w", encoding="utf-8") as out, ThreadPoolExecutor(max(1, args.jobs)) as pool:
+    with open(os.devnull if args.dry_run else path, "w", encoding="utf-8") as out, ThreadPoolExecutor(max(1, args.jobs)) as pool:
         for future in [pool.submit(run_one, task, arm, args, out, transcripts) for task, arm in jobs]:
             future.result()
     if not args.dry_run:
@@ -336,7 +342,9 @@ def main():
     r.add_argument("--runs", type=int, default=3, help="rodadas por tarefa e braço (padrão 3)")
     r.add_argument("--tasks", help="ids separados por vírgula (padrão: todas)")
     r.add_argument("--model", default="opus")
-    r.add_argument("--effort", default="medium")
+    r.add_argument("--effort", default="medium", help="effort do opus-medium e do ponytail (padrão medium)")
+    r.add_argument("--pilot-effort", default="low",
+                   help="effort da sessão principal no braço token-pilot (padrão low)")
     r.add_argument("--arms", help="braços separados por vírgula (padrão: todos)")
     r.add_argument("--tiers", help="tamanhos separados por vírgula: pequena, media, pesada (padrão: todos)")
     r.add_argument("--jobs", type=int, default=1, help="sessões em paralelo (padrão 1)")

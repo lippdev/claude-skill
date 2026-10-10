@@ -8,7 +8,7 @@ de `examples/estoque`, e compara custo, tempo, turnos e se a verificação da ta
 | Braço | O que roda |
 |---|---|
 | `opus-medium` | Sessão única no Opus 5.5 com effort `medium`, sem o pacote |
-| `token-pilot` | A mesma sessão com a pasta `.claude/` do pacote |
+| `token-pilot` | Opus 5.5 com effort `low` na sessão principal, que só coordena, com a pasta `.claude/` do pacote: o trabalho vai para os subagentes (Haiku 5.5, Sonnet 5.5 e Opus 5.5). Mude o effort com `--pilot-effort`. |
 | `ponytail` (opcional) | Sem o pacote, com o plugin do ponytail (`--ponytail <pasta>`) |
 
 As tarefas estão em `bench/tasks.json`, em três tamanhos. Cada uma tem um pedido, uma
