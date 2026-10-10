@@ -1,5 +1,7 @@
 # Benchmark real: Opus 5.5 medium x Token Pilot
 
+O objetivo, as hipóteses e os critérios de sucesso estão em [`OBJETIVO.md`](OBJETIVO.md).
+
 Roda as mesmas tarefas no Claude Code sem interface (`claude -p`), cada uma numa cópia limpa
 de `examples/estoque`, e compara custo, tempo, turnos e se a verificação da tarefa passa.
 
