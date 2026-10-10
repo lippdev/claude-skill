@@ -70,7 +70,7 @@ def prepare(workdir, arm, project=PROJECT):
 
 
 def claude_cmd(prompt, args, arm):
-    cmd = ["claude", "-p", prompt, "--output-format", "json", "--model", args.model,
+    cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose", "--model", args.model,
            "--effort", args.effort, "--permission-mode", "acceptEdits",
            "--setting-sources", "project,local", "--max-budget-usd", str(args.max_budget),
            "--allowedTools", *ALLOWED_TOOLS]
@@ -90,7 +90,19 @@ def fake_result(arm, task):
                            "claude-haiku-5-5": {"costUSD": cost * 0.1, "outputTokens": 3_000}}}
 
 
-def run_one(task, arm, args, out):
+def parse_stream(stdout):
+    """Evento final ("result") da saída stream-json; os demais eventos são o transcrito."""
+    for line in reversed(stdout.splitlines()):
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if event.get("type") == "result":
+            return event
+    raise ValueError("sem evento result")
+
+
+def run_one(task, arm, args, out, transcripts=None):
     with tempfile.TemporaryDirectory(prefix=f"bench-{arm}-") as tmp:
         workdir = Path(tmp) / "projeto"
         prepare(workdir, arm, REPO / task.get("project", "examples/estoque"))
@@ -107,8 +119,12 @@ def run_one(task, arm, args, out):
         else:
             proc = subprocess.run(cmd, cwd=workdir, env=env, capture_output=True, text=True,
                                   timeout=args.timeout)
+            if transcripts:
+                transcripts.mkdir(parents=True, exist_ok=True)
+                n = len(list(transcripts.glob(f"{task['id']}-{arm}-*.jsonl"))) + 1
+                (transcripts / f"{task['id']}-{arm}-{n}.jsonl").write_text(proc.stdout, encoding="utf-8")
             try:
-                data, error = json.loads(proc.stdout), None
+                data, error = parse_stream(proc.stdout), None
             except ValueError:
                 data, error = {}, (proc.stderr or proc.stdout)[-500:]
         wall = time.time() - start
@@ -149,9 +165,11 @@ def cmd_run(args):
     path = RESULTS / f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}{'-fake' if args.fake else ''}.jsonl"
     # Intercala os braços para que mudanças de carga no servidor afetem os dois por igual.
     jobs = [(t, arm) for _ in range(args.runs) for t in tasks for arm in arms]
+    # Transcritos completos ficam fora do git (são grandes); servem para ver onde os turnos foram.
+    transcripts = path.with_suffix("") if args.transcripts else None
     with open(path, "w", encoding="utf-8") as out:
         for task, arm in jobs:
-            run_one(task, arm, args, out)
+            run_one(task, arm, args, out, transcripts)
     if not args.dry_run:
         print(f"\nResultados em {path.relative_to(REPO)}\n")
         compare(path)
@@ -239,6 +257,8 @@ def main():
     r.add_argument("--max-budget", type=float, default=3.0, help="teto em US$ por rodada (padrão 3)")
     r.add_argument("--timeout", type=int, default=1800, help="segundos por rodada (padrão 1800)")
     r.add_argument("--dry-run", action="store_true", help="só mostra os comandos")
+    r.add_argument("--transcripts", action="store_true",
+                   help="salva o transcrito de cada sessão em bench/results/<rodada>/")
     r.add_argument("--fake", action="store_true", help="simula as respostas, sem chamar o modelo")
     c = sub.add_parser("compare", help="resume um arquivo de resultados")
     c.add_argument("paths", nargs="+", help="um ou mais arquivos .jsonl")
