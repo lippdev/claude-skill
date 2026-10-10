@@ -67,6 +67,9 @@ PHASE_PATTERNS = [
     [r"\bimplement", r"\badicion", r"\bcri(ar|e)\b", r"\bconstru", r"\bdesenvolv", r"\bbuild\b", r"\badd\b"],
 ]
 BIG_PROMPT_CHARS = int(os.environ.get("TOKEN_PILOT_BIG_PROMPT_CHARS", "600"))
+# Abaixo deste tamanho de código (sem testes), ler tudo no Opus é barato e o big-task não compensa:
+# no benchmark real (até ~75 KB), ele não foi seguido e só somava contexto.
+SMALL_PROJECT_KB = int(os.environ.get("TOKEN_PILOT_SMALL_PROJECT_KB", "150"))
 
 # Modelos por plano. Ajuste se o seu plano tiver outros modelos, ou use TOKEN_PILOT_MODELS.
 ALL_MODELS = ["haiku", "sonnet", "opus", "fable"]
@@ -186,22 +189,18 @@ def session_rules(models, source):
     ladder = ("2x nele -> implementer-fable" if has_fable else
               "2x nele -> pare e peça ajuda (sem Fable no plano; não use /escalate)")
     lines = [
-        "[Token Pilot] Regras (aplique sem esperar comando):",
-        f"- Modelos do plano: {names} (fonte: {source}).",
-        "- Mudança mecânica -> quick-edit (Haiku 5.5). Busca -> scout. Log longo -> log-reader.",
-        "  Suíte de testes longa -> verifier. Fluxo em vários arquivos -> researcher (Sonnet 5.5).",
-        "- Tarefa grande -> skill big-task. Edite na sessão principal; implementer só para partes",
-        "  grandes em paralelo.",
+        f"[Token Pilot] Regras (modelos do plano: {names}; fonte: {source}):",
+        "- Delegue: mudança mecânica -> quick-edit (Haiku 5.5); busca -> scout; log longo -> log-reader;",
+        "  suíte longa -> verifier; fluxo em vários arquivos -> researcher (Sonnet 5.5). Edite aqui.",
+        "- Tarefa grande em projeto grande -> skill big-task.",
         f"- Mesma parte falhou 2x -> implementer-high; {ladder}. Nunca peça para trocar /model ou /effort.",
-        "- Assunto novo -> sugira /clear. Como plugin, os agentes têm prefixo (token-pilot:scout).",
     ]
     overrides = [f"{agent} -> model: \"{got}\"" for agent, wanted in AGENT_MODELS.items()
                  if (got := model_for(agent, models)) and got != wanted]
     if overrides:
         lines.append("- Fora do plano, passe model: " + "; ".join(overrides) + ".")
-    lines.append("- Modelo indisponível num subagente -> use o substituto (Haiku 5.5 -> Sonnet 5.5, "
-                 "Sonnet 5.5 -> Opus, Opus -> Sonnet 5.5); sem Fable, pare a escada e peça ajuda. "
-                 "Haiku 5.5 recusou ou voltou vazio -> refaça com model: \"sonnet\".")
+    lines.append("- Subagente sem o modelo, recusou ou voltou vazio -> refaça com model: \"sonnet\" "
+                 "(se era Sonnet, \"opus\"). Como plugin, os agentes têm prefixo (token-pilot:scout).")
     return "\n".join(lines)
 
 # ---------------------------------------------------------------- disciplina e mapa
@@ -310,6 +309,20 @@ def code_map(root, budget=MAP_BUDGET):
     return "\n".join(lines)
 
 
+def small_project(root):
+    """True se o código do projeto (sem testes) cabe em SMALL_PROJECT_KB."""
+    limit, total = SMALL_PROJECT_KB * 1024, 0
+    for rel in project_files(root):
+        if os.path.splitext(rel)[1] in SYMBOL_PATTERNS and not is_test_or_generated(rel):
+            try:
+                total += os.path.getsize(os.path.join(root, rel))
+            except OSError:
+                continue
+            if total > limit:
+                return False
+    return True
+
+
 def project_root(data):
     return data.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 
@@ -398,7 +411,7 @@ def transcript_mb(transcript_path):
         return 0.0
 
 
-def decide(state, prompt, transcript_path, models=ALL_MODELS):
+def decide(state, prompt, transcript_path, models=ALL_MODELS, root=None):
     """Atualiza o estado e devolve (chave_da_dica, texto) ou (None, None)."""
     state["prompts"] += 1
     state["since_compact"] += 1
@@ -449,7 +462,8 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS):
             )
         return None, None
 
-    if is_big_task(prompt) and state["prompts"] - state.get("big_task_at", -99) > 5:
+    if (is_big_task(prompt) and state["prompts"] - state.get("big_task_at", -99) > 5
+            and not (root and small_project(root))):
         state["big_task_at"] = state["prompts"]
         return "big_task", (
             "Tarefa grande detectada. O Claude vai dividir em análise (Haiku 5.5/Sonnet 5.5), "
@@ -505,7 +519,7 @@ def main():
     path = state_path(data.get("session_id", ""))
     state = load_state(path)
 
-    key, hint = decide(state, prompt, data.get("transcript_path"), models)
+    key, hint = decide(state, prompt, data.get("transcript_path"), models, project_root(data))
     if key and key == state.get("last_hint") and key not in ("compact",):
         key, hint = None, None  # não repete a mesma dica
     if key:

@@ -14,7 +14,9 @@ HOOK = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "token_pil
 
 class HookSession:
     def __init__(self, state_dir, session="teste", **env):
-        self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir, HOME=state_dir, **env)
+        # Limite 0: o projeto atual conta como grande, salvo quando o teste pede outro.
+        self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir, HOME=state_dir,
+                        **{"TOKEN_PILOT_SMALL_PROJECT_KB": "0", **env})
         for key in ("TOKEN_PILOT_MODELS", "TOKEN_PILOT_PLAN"):
             if key not in env:
                 self.env.pop(key, None)
@@ -70,6 +72,15 @@ class TestHook(unittest.TestCase):
         self.s.send("analisa o carrinho e implementa cupons")
         self.s.send("ok")
         self.assertIsNone(self.s.send("analisa o frete e implementa isso também"))
+
+    def test_projeto_pequeno_nao_aciona_big_task(self):
+        s = HookSession(self.tmp.name, session="pequeno", TOKEN_PILOT_SMALL_PROJECT_KB="150")
+        Path(self.tmp.name, "app.py").write_text("def main():\n    pass\n")
+        out = s.run(json.dumps({"session_id": "pequeno", "cwd": self.tmp.name,
+                                "prompt": "analisa o módulo de pagamento e implementa reembolso"}))
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn("big-task", ctx)
+        self.assertIn("Disciplina de resposta", ctx)
 
     def test_pedido_simples_nao_aciona_big_task(self):
         self.assertIsNone(self.s.send("corrige o typo no README"))
@@ -166,7 +177,7 @@ class TestPlano(unittest.TestCase):
         proj.mkdir(parents=True)
         (proj / "settings.json").write_text(json.dumps({"availableModels": ["sonnet", "claude-opus-5-5"]}))
         _, ctx = self.regras(TOKEN_PILOT_PLAN="max", CLAUDE_PROJECT_DIR=str(proj.parent))
-        self.assertIn("Sonnet 5.5, Opus 5.5 (fonte: plano max (TOKEN_PILOT_PLAN) + availableModels)", ctx)
+        self.assertIn("Sonnet 5.5, Opus 5.5; fonte: plano max (TOKEN_PILOT_PLAN) + availableModels", ctx)
         self.assertIn('scout -> model: "sonnet"', ctx)
 
 
