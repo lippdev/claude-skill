@@ -158,6 +158,58 @@ O que os registros mostram:
   tarefas curtas. A direção (−18% de custo e −21% de tempo, com os mesmos acertos) é
   consistente com a estimativa, mas o número exato precisa de mais rodadas.
 
+## Rodada completa: 7 tarefas × 2 braços × 3 rodadas
+
+10/10/2026, Claude Code 2.1.296, Opus 5.5 `medium` nos dois braços, 42 sessões, mediana das 3
+rodadas de cada tarefa. Todas passaram na verificação nos dois braços (21 de 21 em cada).
+Os arquivos estão em `bench/results/20261010-*.jsonl`; reproduza com
+`python3 bench/run.py compare bench/results/20261010-*.jsonl`.
+
+| Tarefa | Opus 5.5 medium | Token Pilot | Custo | Tempo | Turnos |
+|---|---|---|---|---|---|
+| `renomear` | $0.166 · 23 s | $0.085 · 25 s | **−49%** | +9% | 12 → 2 |
+| `grande-sincronizar` (log longo) | $0.305 · 41 s | $0.198 · 28 s | **−35%** | −32% | 14 → 9 |
+| `simulador` (log) | $0.215 · 23 s | $0.150 · 17 s | **−30%** | −26% | 7 → 7 |
+| `grande-bug` | $0.180 · 22 s | $0.157 · 18 s | −13% | −18% | 11 → 6 |
+| `grande-reembolso` | $0.535 · 112 s | $0.527 · 96 s | −1% | −14% | 18 → 18 |
+| `reposicao` | $0.284 · 45 s | $0.290 · 39 s | +2% | −13% | 9 → 23 |
+| `corrigir-testes` | $0.219 · 24 s | $0.231 · 22 s | +5% | −8% | 15 → 14 |
+| **Média geométrica** | | | **−20%** | **−15%** | **−25%** |
+
+- **Ganha onde há trabalho mecânico ou leitura longa:** `renomear` (vai para o `quick-edit`) e
+  as duas tarefas de log.
+- **Fica neutro onde o Opus precisa investigar de qualquer jeito:** `corrigir-testes`,
+  `reposicao` e `grande-reembolso` ficaram dentro de ±5%, menos que a variação entre rodadas
+  iguais (ex.: `reposicao` foi de +16% a −16% entre rodadas).
+- **O tempo melhora quase sempre**, mesmo quando o custo não muda.
+- **As rodadas vêm de commits diferentes do repositório**, mas a pasta `.claude/` do pacote
+  não mudou entre elas.
+- **Ainda é pouco para diferenças pequenas:** 3 rodadas por tarefa só sustentam as diferenças
+  grandes (`renomear`, logs).
+
+## Ajuste depois da rodada completa
+
+Os transcritos (`bench/run.py run --transcripts`) mostraram que os dois braços fazem de 6 a 9
+chamadas ao modelo e escrevem pouco; os "turnos" da tabela contam chamadas de ferramenta. O custo
+extra nas tarefas neutras vinha do texto injetado pelo hook, relido a cada chamada (~1,3 mil
+tokens nas curtas, ~2 mil no `reposicao`). Mudanças:
+
+- O aviso de `big-task` não aparece em projeto com menos de 150 KB de código sem testes
+  (`TOKEN_PILOT_SMALL_PROJECT_KB`). Ali ele nunca foi seguido; a disciplina continua.
+- As regras do início da sessão caíram de 860 para 625 caracteres.
+
+Revalidação do braço Token Pilot (2 rodadas por tarefa, mediana; base = mediana de 5 rodadas do
+Opus 5.5 medium sem o pacote, 3 no `grande-reembolso`):
+
+| Tarefa | Token Pilot antes | Token Pilot depois |
+|---|---|---|
+| `corrigir-testes` | +8% | +3% |
+| `reposicao` | +3% | 0% |
+| `grande-reembolso` | −1% | +3% ($0.505 e $0.593: só variação) |
+
+O efeito é pequeno e está perto da variação entre rodadas; o ganho principal do pacote continua
+nas tarefas mecânicas e de log.
+
 ## Premissas principais
 
 - **Preços:** API da Anthropic por milhão de tokens.
