@@ -187,6 +187,29 @@ Os arquivos estão em `bench/results/20261010-*.jsonl`; reproduza com
 - **Ainda é pouco para diferenças pequenas:** 3 rodadas por tarefa só sustentam as diferenças
   grandes (`renomear`, logs).
 
+## Ajuste depois da rodada completa
+
+Os transcritos (`bench/run.py run --transcripts`) mostraram que os dois braços fazem de 6 a 9
+chamadas ao modelo e escrevem pouco; os "turnos" da tabela contam chamadas de ferramenta. O custo
+extra nas tarefas neutras vinha do texto injetado pelo hook, relido a cada chamada (~1,3 mil
+tokens nas curtas, ~2 mil no `reposicao`). Mudanças:
+
+- O aviso de `big-task` não aparece em projeto com menos de 150 KB de código sem testes
+  (`TOKEN_PILOT_SMALL_PROJECT_KB`). Ali ele nunca foi seguido; a disciplina continua.
+- As regras do início da sessão caíram de 860 para 625 caracteres.
+
+Revalidação do braço Token Pilot (2 rodadas por tarefa, mediana; base = mediana de 5 rodadas do
+Opus 5.5 medium sem o pacote, 3 no `grande-reembolso`):
+
+| Tarefa | Token Pilot antes | Token Pilot depois |
+|---|---|---|
+| `corrigir-testes` | +8% | +3% |
+| `reposicao` | +3% | 0% |
+| `grande-reembolso` | −1% | +3% ($0.505 e $0.593: só variação) |
+
+O efeito é pequeno e está perto da variação entre rodadas; o ganho principal do pacote continua
+nas tarefas mecânicas e de log.
+
 ## Premissas principais
 
 - **Preços:** API da Anthropic por milhão de tokens.
