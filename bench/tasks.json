@@ -2,47 +2,104 @@
   {
     "id": "renomear",
     "kind": "simples",
+    "tier": "pequena",
     "prompt": "Renomeia a função valor_total para valor_total_estoque e atualiza onde ela é usada.",
     "check": "grep -rq --include='*.py' 'def valor_total_estoque' estoque && ! grep -rqw --include='*.py' valor_total estoque tests"
   },
   {
+    "id": "pequena-renomear-loja",
+    "kind": "simples",
+    "tier": "pequena",
+    "project": "examples/loja-grande",
+    "prompt": "Renomeia a função proporcional de loja/utils/dinheiro.py para valor_proporcional e atualiza onde ela é usada.",
+    "check": "grep -q 'def valor_proporcional' loja/utils/dinheiro.py && ! grep -rqw --include='*.py' proporcional loja tests tools"
+  },
+  {
+    "id": "pequena-milhar",
+    "kind": "simples",
+    "tier": "pequena",
+    "project": "examples/loja-grande",
+    "hidden": "milhar",
+    "prompt": "A função formatar em loja/utils/dinheiro.py não põe separador de milhar: R$ 1234,50 deveria sair R$ 1.234,50. Corrige e atualiza o teste dela.",
+    "check": "python3 -m unittest discover -s _ocultos -t . -q",
+    "quality": {
+      "teste_dinheiro_passa": "python3 -m unittest tests.test_dinheiro -q"
+    }
+  },
+  {
     "id": "corrigir-testes",
     "kind": "grande",
+    "tier": "media",
     "prompt": "Os testes do projeto estão falhando. Descobre por quê e corrige a causa, sem mudar os testes.",
-    "check": "python3 -m unittest -q"
+    "check": "python3 -m unittest -q",
+    "quality": {
+      "testes_intactos": "git diff --quiet HEAD -- tests"
+    }
   },
   {
     "id": "simulador",
     "kind": "log",
+    "tier": "media",
     "prompt": "Roda python3 simular.py, descobre por que ele quebra e corrige sem mudar os dados em dados/.",
-    "check": "python3 simular.py > /dev/null"
-  },
-  {
-    "id": "reposicao",
-    "kind": "grande",
-    "prompt": "Analisa o projeto, corrige os testes que falham e implementa um alerta de reposição: um comando `reposicao` no cli que lista, para cada produto no mínimo ou abaixo dele, quantas unidades comprar para chegar ao dobro do mínimo. Escolha você mesmo o melhor desenho, sem me perguntar, e adicione testes.",
-    "check": "python3 -m unittest -q && python3 -m estoque.cli reposicao | grep -q CAF-001"
+    "check": "python3 simular.py > /dev/null",
+    "quality": {
+      "dados_intactos": "git diff --quiet HEAD -- dados"
+    }
   },
   {
     "id": "grande-bug",
     "kind": "grande",
+    "tier": "media",
     "project": "examples/loja-grande",
     "prompt": "O fechamento de pedido está calculando o desconto do cupom errado quando o pedido também tem promoção. Investiga o fluxo de cálculo e corrige a causa, sem mudar os testes.",
-    "check": "python3 -m unittest -q"
+    "check": "python3 -m unittest -q",
+    "quality": {
+      "testes_intactos": "git diff --quiet HEAD -- tests"
+    }
   },
   {
     "id": "grande-sincronizar",
     "kind": "log",
+    "tier": "media",
     "project": "examples/loja-grande",
     "prompt": "Roda python3 tools/sincronizar.py, descobre por que ele quebra no meio e corrige para que todos os produtos do export sejam sincronizados, sem editar o arquivo de dados.",
-    "check": "python3 tools/sincronizar.py | tail -1 | grep -q 'Sincronizados: 300 de 300'"
+    "check": "python3 tools/sincronizar.py | tail -1 | grep -q 'Sincronizados: 300 de 300'",
+    "quality": {
+      "dados_intactos": "git diff --quiet HEAD -- data"
+    }
+  },
+  {
+    "id": "reposicao",
+    "kind": "grande",
+    "tier": "pesada",
+    "prompt": "Analisa o projeto, corrige os testes que falham e implementa um alerta de reposição: um comando `reposicao` no cli que lista, para cada produto no mínimo ou abaixo dele, quantas unidades comprar para chegar ao dobro do mínimo. Escolha você mesmo o melhor desenho, sem me perguntar, e adicione testes.",
+    "check": "python3 -m unittest -q && python3 -m estoque.cli reposicao | grep -q CAF-001",
+    "quality": {
+      "testes_adicionados": "test -n \"$(git status --porcelain tests)\""
+    }
   },
   {
     "id": "grande-reembolso",
     "kind": "grande",
+    "tier": "pesada",
     "project": "examples/loja-grande",
     "hidden": "reembolso",
     "prompt": "Analisa o projeto e implementa reembolso parcial de pedidos: um método reembolsar(pedido_id, itens) no ServicoPedidos, onde itens é um dict {sku: quantidade}. Ele devolve os itens ao estoque, estorna pelo pagamento original o valor pago por esses itens (com promoção e cupom já descontados; o frete não volta), marca o pedido como \"reembolsado_parcial\", avisa o cliente e devolve o valor estornado. Não deixe reembolsar mais do que foi comprado nem pedido que não está pago. Escolha você mesmo o desenho, sem me perguntar, e adicione testes.",
-    "check": "python3 -m unittest discover -s _ocultos -t . -q"
+    "check": "python3 -m unittest discover -s _ocultos -t . -q",
+    "quality": {
+      "testes_adicionados": "test -n \"$(git status --porcelain tests)\""
+    }
+  },
+  {
+    "id": "pesada-limite-cupom",
+    "kind": "grande",
+    "tier": "pesada",
+    "project": "examples/loja-grande",
+    "hidden": "limite-cupom",
+    "prompt": "Analisa o projeto e implementa limite de uso de cupons. O Cupom ganha dois campos opcionais, limite_total (quantas vezes pode ser usado no total) e limite_por_cliente (quantas vezes cada cliente pode usar), ambos None por padrão, sem limite. Conta como uso só pedido pago com o cupom: pedido aberto não conta, e cancelar um pedido devolve o uso. Fechar um pedido com cupom esgotado levanta CupomInvalido sem cobrar, sem reservar estoque e deixa o pedido aberto. Escolha você mesmo o desenho, sem me perguntar, e adicione testes.",
+    "check": "python3 -m unittest discover -s _ocultos -t . -q",
+    "quality": {
+      "testes_adicionados": "test -n \"$(git status --porcelain tests)\""
+    }
   }
 ]
