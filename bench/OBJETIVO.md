@@ -100,8 +100,8 @@ Veja `bench/README.md`. Sem chave de API, rode na sua máquina, com o Claude Cod
 plano. O consumo sai do limite de uso, e os tokens são registrados do mesmo jeito:
 
 ```bash
-python3 bench/run.py run --runs 1 --tiers pequena --plan pro   # teste rápido, 6 sessões
-python3 bench/run.py run --runs 3 --plan pro --jobs 2          # completo, 60 sessões
+python3 bench/run.py run --runs 1 --tiers pequena   # teste rápido, 6 sessões
+python3 bench/run.py run --runs 3 --jobs 2          # completo, 60 sessões
 python3 bench/run.py compare bench/results/<arquivo>.jsonl
 ```
 

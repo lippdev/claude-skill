@@ -6,7 +6,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent / ".claude"
-MODELS = {"haiku", "sonnet", "opus", "fable", "inherit"}
+# Os subagentes usam só modelos presentes em todos os planos.
+MODELS = {"haiku", "sonnet", "opus"}
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 # Modelo e effort esperados de cada agente: a política do pacote.
@@ -18,11 +19,10 @@ EXPECTED_AGENTS = {
     "ideator": ("opus", "high"),
     "implementer": ("opus", "medium"),
     "implementer-high": ("opus", "high"),
-    "implementer-fable": ("fable", "high"),
     "quick-edit": ("haiku", "medium"),
 }
 READ_ONLY = {"scout", "log-reader", "verifier", "researcher", "ideator"}
-EXPECTED_SKILLS = {"token-pilot", "big-task", "boost", "escalate"}
+EXPECTED_SKILLS = {"token-pilot", "big-task"}
 
 errors = []
 
@@ -76,10 +76,8 @@ for path in sorted((ROOT / "skills").glob("*/SKILL.md")):
     skills[fm.get("name")] = (fm, body, path)
     check(fm.get("name") == path.parent.name, f"{path}: name difere da pasta")
     check(fm.get("description"), f"{path}: sem description")
-    if "model" in fm:
-        check(fm["model"] in MODELS, f"{path}: model inválido")
-    if "effort" in fm:
-        check(fm["effort"] in EFFORTS, f"{path}: effort inválido")
+    # Uma skill com model/effort trocaria o modelo da sessão principal.
+    check("model" not in fm and "effort" not in fm, f"{path}: skill não pode fixar model/effort")
     for link in re.findall(r"\]\(([^)#]+\.md)\)", body):
         check((path.parent / link).exists(), f"{path}: link quebrado {link}")
 
@@ -88,18 +86,20 @@ check(EXPECTED_SKILLS <= set(skills), f"skills faltando: {EXPECTED_SKILLS - set(
 # Todo agente citado na big-task precisa existir.
 if "big-task" in skills:
     body = skills["big-task"][1]
-    cited = set(re.findall(r"`((?:scout|log-reader|verifier|researcher|ideator|quick-edit|implementer(?:-high|-fable)?))`", body))
+    cited = set(re.findall(r"`((?:scout|log-reader|verifier|researcher|ideator|quick-edit|implementer(?:-high)?))`", body))
     check(cited == set(EXPECTED_AGENTS), f"big-task cita {sorted(cited)}, esperado {sorted(EXPECTED_AGENTS)}")
 
 # Hook registrado e existente.
 settings = (ROOT / "settings.json").read_text()
+check('"model"' not in settings and '"effortLevel"' not in settings,
+      "settings.json não pode fixar o modelo ou o effort da sessão principal")
 check("token_pilot.py" in settings, "settings.json não registra o hook")
 check((ROOT / "hooks" / "token_pilot.py").exists(), "hook token_pilot.py não existe")
 for event in ("SessionStart", "UserPromptSubmit", "SubagentStart"):
     check(f'"{event}"' in settings, f"settings.json não registra o hook em {event}")
 disc = (ROOT / "hooks" / "disciplina.md")
-check(disc.exists() and "## edição" in disc.read_text() and "## leitura" in disc.read_text(),
-      "disciplina.md precisa das seções '## edição' e '## leitura'")
+check(disc.exists() and all(f"## {s}" in disc.read_text() for s in ("coordenação", "edição", "leitura")),
+      "disciplina.md precisa das seções '## coordenação', '## edição' e '## leitura'")
 
 if errors:
     print("FALHOU:")

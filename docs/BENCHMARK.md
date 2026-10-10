@@ -1,5 +1,10 @@
 # Benchmark estimado: Opus 5.5 medium (uso normal) x Token Pilot
 
+> **Versão anterior do pacote.** Tudo nesta página foi estimado e medido quando a sessão
+> principal ficava no Opus 5.5 `medium` e editava ela mesma. Na versão atual, a sessão
+> principal fica no modelo que você escolher, só coordena, e toda edição vai para subagentes
+> (Haiku 5.5, Sonnet 5.5 e Opus 5.5). Os números abaixo ainda não foram refeitos para ela.
+
 > **Estimativa, não medição.** Os números vêm de `tests/benchmark_estimate.py`, um modelo
 > turno a turno com premissas explícitas no código. A medição real vem de `bench/run.py`
 > (seção "Medir de verdade" abaixo).

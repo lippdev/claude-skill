@@ -142,8 +142,6 @@ def run_one(task, arm, args, out, transcripts=None):
         prepare(workdir, arm, REPO / task.get("project", "examples/estoque"))
         before = suite_status(workdir)
         env = dict(os.environ, TOKEN_PILOT_STATE_DIR=str(Path(tmp) / "estado"))
-        if args.plan:
-            env["TOKEN_PILOT_PLAN"] = args.plan
         cmd = claude_cmd(task["prompt"], args, arm)
         if args.dry_run:
             print(f"[{arm}] {task['id']}: (cd {workdir} && " + " ".join(json.dumps(c) for c in cmd) + ")")
@@ -342,7 +340,6 @@ def main():
     r.add_argument("--arms", help="braços separados por vírgula (padrão: todos)")
     r.add_argument("--tiers", help="tamanhos separados por vírgula: pequena, media, pesada (padrão: todos)")
     r.add_argument("--jobs", type=int, default=1, help="sessões em paralelo (padrão 1)")
-    r.add_argument("--plan", help="plano para o Token Pilot (pro, max, team, enterprise, api)")
     r.add_argument("--ponytail", help="pasta do plugin ponytail, para incluir o terceiro braço")
     r.add_argument("--max-budget", type=float, default=3.0, help="teto em US$ por rodada (padrão 3)")
     r.add_argument("--timeout", type=int, default=1800, help="segundos por rodada (padrão 1800)")
