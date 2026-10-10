@@ -1,0 +1,1 @@
+{"task": "renomear", "kind": "simples", "arm": "opus-medium", "cost": 0.1749462, "duration_s": 22.845, "turns": 12, "subtype": "success", "is_error": false, "passed": true, "diff": "3 files changed, 4 insertions(+), 4 deletions(-)", "models": {"claude-opus-5-5": {"cost": 0.1749462, "out": 2067}}, "error": null, "fake": false, "version": "d832cdc"}
