@@ -1,4 +1,46 @@
-# Benchmark estimado: Opus 5.5 medium (uso normal) x Token Pilot
+# Benchmark: Opus 5.5 medium (uso normal) x Token Pilot
+
+## Versão atual: sessão principal coordena (10/10/2026)
+
+60 sessões reais (10 tarefas × 2 braços × 3 rodadas), Claude Code 2.1.296, arquivo
+`bench/results/20261010-231117.jsonl`.
+
+- **`opus-medium`:** uso normal, Opus 5.5 `medium`, sem o pacote.
+- **`token-pilot`:** Opus 5.5 `low` na sessão principal, que só coordena; edição no
+  `implementer` (Opus 5.5 medium), mudança mecânica no `quick-edit` (Haiku 5.5).
+
+| Tamanho | Custo | Tokens | Tempo | Acerto (base 100%) |
+|---|---|---|---|---|
+| Pequena (3 tarefas) | **−37%** | −29% | +21% | 100% |
+| Média (4 tarefas) | −2% | −1% | +14% | 100% |
+| Pesada (3 tarefas) | −1% | −4% | +4% | 89% |
+| **Todas** | **−14%** | −11% | +13% | 97% |
+
+Por tarefa (mediana de custo): `renomear` −39%, `pequena-renomear-loja` −43%,
+`pequena-milhar` −28%, `grande-sincronizar` −41%, `simulador` −6%, `pesada-limite-cupom` −6%,
+`grande-reembolso` −7%, `reposicao` +12%, `grande-bug` +26%, `corrigir-testes` +34%.
+
+O que os transcritos mostram:
+
+- **A sessão principal custa ~US$ 0,07–0,09 por tarefa só para coordenar**, mesmo em `low`:
+  é o contexto inicial do Claude Code, gravado e relido no Opus.
+- **Delegar a um `implementer` no Opus abre um segundo contexto Opus.** Nas tarefas médias,
+  ele custou US$ 0,12–0,17 e a soma passou do uso normal (+26% e +34% em `grande-bug` e
+  `corrigir-testes`). Com a sessão principal e o subagente no mesmo modelo, a delegação só
+  paga a si mesma quando o trabalho vai para um modelo mais barato.
+- **Onde o trabalho vai para o Haiku, a economia é grande:** o `quick-edit` custou cerca de
+  US$ 0,002 nas tarefas pequenas.
+- **Uma falha em 30:** no `grande-reembolso`, o `implementer` criou `ReembolsoInvalido(Exception)`
+  e os testes ocultos esperavam `ValueError`. O pedido não dizia qual exceção usar.
+- **Tempo:** +13%, pelo tempo de partida de cada subagente.
+- **Ainda não medido:** com a sessão principal num modelo mais caro que o Opus (Fable), a
+  coordenação custaria mais e o trabalho delegado custaria o mesmo; a economia relativa
+  deve crescer, mas falta medir.
+
+## Versões anteriores
+
+Tudo abaixo foi estimado e medido quando a sessão principal ficava no Opus 5.5 `medium` e
+editava ela mesma.
 
 > **Estimativa, não medição.** Os números vêm de `tests/benchmark_estimate.py`, um modelo
 > turno a turno com premissas explícitas no código. A medição real vem de `bench/run.py`

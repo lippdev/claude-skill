@@ -8,7 +8,7 @@
     {
       "name": "token-pilot",
       "source": ".",
-      "description": "Delega leitura, logs e testes a Haiku 5.5 e Sonnet 5.5, edita no Opus 5.5 com uma disciplina de resposta enxuta e escala o effort sozinho quando trava."
+      "description": "A sessão principal coordena e delega cada parte a subagentes no Haiku 5.5, Sonnet 5.5 e Opus 5.5, com uma disciplina de resposta enxuta. Não mexe no modelo da sessão principal."
     }
   ]
 }

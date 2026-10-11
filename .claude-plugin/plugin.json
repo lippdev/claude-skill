@@ -1,7 +1,7 @@
 {
   "name": "token-pilot",
   "version": "1.0.0",
-  "description": "Delega leitura, logs e testes a Haiku 5.5 e Sonnet 5.5, edita no Opus 5.5 com uma disciplina de resposta enxuta e escala o effort sozinho quando trava.",
+  "description": "A sessão principal coordena e delega cada parte a subagentes no Haiku 5.5, Sonnet 5.5 e Opus 5.5, com uma disciplina de resposta enxuta. Não mexe no modelo da sessão principal.",
   "author": {
     "name": "lippdev"
   },
@@ -12,14 +12,14 @@
     "custo",
     "subagentes",
     "haiku",
-    "opus"
+    "opus",
+    "sonnet"
   ],
   "skills": [
     "./.claude/skills"
   ],
   "agents": [
     "./.claude/agents/ideator.md",
-    "./.claude/agents/implementer-fable.md",
     "./.claude/agents/implementer-high.md",
     "./.claude/agents/implementer.md",
     "./.claude/agents/log-reader.md",

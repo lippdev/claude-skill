@@ -18,7 +18,7 @@ claude
 ```
 
 Confira com `/agents` se aparecem os 8 agentes (scout, log-reader, verifier, researcher,
-ideator, implementer, implementer-high, implementer-fable).
+ideator, quick-edit, implementer, implementer-high).
 
 ## Teste 0: sem comandos (o fluxo nativo)
 

@@ -20,7 +20,6 @@ Estado inicial: `python3 -m unittest -q` mostra `FAILED (failures=3)`.
 cd ~ && (git clone -q https://github.com/lippdev/claude-skill.git || git -C claude-skill pull -q origin main)
 rm -rf ~/tp-estoque && cp -r ~/claude-skill/examples/estoque ~/tp-estoque && cp -r ~/claude-skill/.claude ~/tp-estoque/
 cd ~/tp-estoque && git init -q && git add -A && git commit -qm "estado inicial"
-python3 .claude/hooks/token_pilot.py --plan pro     # troque pelo seu plano: pro, max, team...
 python3 -m unittest -q                              # deve mostrar FAILED (failures=3)
 ```
 
@@ -128,10 +127,10 @@ tempo e os erros. Ele não inclui o conteúdo das respostas nem das ferramentas.
 
 | Critério | Certo | Errado |
 |---|---|---|
-| Pedido simples | Resolve na sessão principal | Aciona o fluxo grande ou o ideator |
+| Pedido simples | Pergunta respondida direto; mudança vai a um só subagente | Aciona o fluxo grande ou o ideator |
 | Leitura | `scout` e `log-reader` no Haiku | Sessão principal lendo muitos arquivos ou o log inteiro |
 | Brainstorm | Um `ideator` com entrada pequena e uma pausa | Brainstorm na sessão principal ou sem pausa |
-| Edição | Só `implementer*` no Opus | Edição no Haiku ou no Sonnet |
+| Edição | Só nos subagentes: `implementer*` no Opus, `quick-edit` para o mecânico | Edição na sessão principal, ou não mecânica no Haiku ou no Sonnet |
 | Modelo real | Igual ao esperado no relatório | Diferente (⚠️ no relatório) |
 | Trava | Confere antes de subir; sobe para o high se a falha for real | Sobe sem conferir; pede `/model` ou `/effort` |
 | Custo | A maior parte da leitura nos modelos baratos | Opus com a maior parte dos tokens de leitura |

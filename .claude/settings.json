@@ -1,6 +1,4 @@
 {
-  "model": "opus",
-  "effortLevel": "medium",
   "hooks": {
     "SessionStart": [
       {
