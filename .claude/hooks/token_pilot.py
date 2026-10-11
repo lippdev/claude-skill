@@ -261,6 +261,22 @@ def is_big_task(prompt):
     return phases >= 2 or (len(prompt) >= BIG_PROMPT_CHARS and phases >= 1)
 
 
+# Texto colado (saída de terminal, logs, tabelas, código) não é o pedido do usuário: o tamanho e
+# as palavras dele não contam como tarefa grande nem como falha repetida.
+PASTED_BLOCKS = [
+    r"<pasted_content[^>]*>.*?</pasted_content[^>]*>",
+    r"```.*?(```|\Z)",
+]
+PASTED_LINE = re.compile(r"^\s*([│┃┌┐└┘├┤┬┴┼─━╭╮╰╯|>]|\$ |❯|⎿|Traceback|File \"|at \S+\(|\d{4}-\d\d-\d\d[T ]\d\d:)")
+
+
+def user_text(prompt):
+    """A parte do prompt que o usuário digitou, sem blocos colados, tabelas ou logs."""
+    for block in PASTED_BLOCKS:
+        prompt = re.sub(block, " ", prompt, flags=re.DOTALL)
+    return "\n".join(line for line in prompt.splitlines() if not PASTED_LINE.match(line)).strip()
+
+
 def matches(patterns, text):
     return any(re.search(p, text, re.IGNORECASE | re.MULTILINE) for p in patterns)
 
@@ -368,7 +384,7 @@ def main():
                                                  "additionalContext": session_rules()}}, ensure_ascii=False))
         return 0
 
-    prompt = data.get("prompt") or ""
+    prompt = user_text(data.get("prompt") or "")  # comandos /... não são removidos
     path = state_path(data.get("session_id", ""))
     state = load_state(path)
 

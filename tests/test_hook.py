@@ -71,6 +71,22 @@ class TestHook(unittest.TestCase):
         self.s.send("ok")
         self.assertIsNone(self.s.send("analisa o frete e implementa isso também"))
 
+    def test_texto_colado_e_ignorado(self):
+        tabela = "\n".join(f"│ Agents │ 8 │ scout, implementer, analisa e implementa │ refatorar {i} │"
+                            for i in range(15))
+        self.assertIsNone(self.s.send(f"<pasted_content id=\"a1\">\n{tabela}\n</pasted_content id=\"a1\">"))
+        log = "```\n" + "Error: mesmo erro, ainda não funcionou\n" * 30 + "```"
+        self.assertIsNone(self.s.send("olha isso\n" + log))
+        self.assertIsNone(self.s.send(log))
+        self.assertIsNone(self.s.send("❯ /agents\n  ⎿  continua dando o mesmo erro, analisa e implementa"))
+
+    def test_pedido_digitado_detectado_ao_lado_de_colagem(self):
+        msg = self.s.send("analisa o carrinho e implementa cupons\n```\nlog line\n```")
+        self.assertIn("Tarefa grande", msg)
+
+    def test_comando_barra_continua_detectado(self):
+        self.assertIsNone(self.s.context("/compact\n```\nanalisa e implementa\n```"))
+
     def test_pedido_simples_nao_aciona_big_task(self):
         self.assertIsNone(self.s.send("corrige o typo no README"))
 
