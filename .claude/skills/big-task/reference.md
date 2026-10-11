@@ -9,7 +9,7 @@
 | "o que fazer", "qual o melhor jeito", "ideias" | baixa | alto | `ideator` |
 | "implemente", "corrija", "adicione" | média | médio | `implementer` |
 | mesma parte falhou 2× | média | alto | `implementer-high` |
-| falhou 2× no high | média | muito alto | `implementer-fable` |
+| falhou 2× no high | — | — | pare e peça ajuda ao usuário |
 | "rode os testes", "confira" | baixa | baixo | `verifier` |
 
 Leitura alta vai para modelo barato. Raciocínio alto com entrada pequena pode ir para

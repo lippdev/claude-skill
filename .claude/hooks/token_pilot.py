@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Token Pilot hook: acompanha o uso da sessão e sugere trocas de modelo/effort.
+"""Token Pilot hook: faz a sessão principal coordenar e delegar o trabalho a subagentes
+(Haiku 5.5, Sonnet 5.5 e Opus 5.5), sem mexer no modelo nem no effort da sessão principal.
 
-Registrado em UserPromptSubmit. Lê o JSON do hook pela entrada padrão, atualiza um
+Registrado em SessionStart, UserPromptSubmit e SubagentStart. Lê o JSON do hook pela entrada padrão, atualiza um
 estado por sessão e, quando algo muda, devolve um lembrete para o Claude
 (additionalContext) e um aviso curto para o usuário (systemMessage).
 
@@ -18,7 +19,7 @@ from pathlib import Path
 
 # Limiares ajustáveis por variável de ambiente.
 STALLS_TO_BOOST = int(os.environ.get("TOKEN_PILOT_STALLS_TO_BOOST", "2"))
-STALLS_TO_ESCALATE = int(os.environ.get("TOKEN_PILOT_STALLS_TO_ESCALATE", "4"))
+STALLS_TO_STOP = int(os.environ.get("TOKEN_PILOT_STALLS_TO_STOP", "4"))
 PROMPTS_TO_COMPACT = int(os.environ.get("TOKEN_PILOT_PROMPTS_TO_COMPACT", "30"))
 TRANSCRIPT_MB_TO_COMPACT = float(os.environ.get("TOKEN_PILOT_TRANSCRIPT_MB", "2"))
 
@@ -67,141 +68,29 @@ PHASE_PATTERNS = [
     [r"\bimplement", r"\badicion", r"\bcri(ar|e)\b", r"\bconstru", r"\bdesenvolv", r"\bbuild\b", r"\badd\b"],
 ]
 BIG_PROMPT_CHARS = int(os.environ.get("TOKEN_PILOT_BIG_PROMPT_CHARS", "600"))
-# Abaixo deste tamanho de código (sem testes), ler tudo no Opus é barato e o big-task não compensa:
-# no benchmark real (até ~75 KB), ele não foi seguido e só somava contexto.
-SMALL_PROJECT_KB = int(os.environ.get("TOKEN_PILOT_SMALL_PROJECT_KB", "150"))
-
-# Modelos por plano. Ajuste se o seu plano tiver outros modelos, ou use TOKEN_PILOT_MODELS.
-ALL_MODELS = ["haiku", "sonnet", "opus", "fable"]
-PLAN_MODELS = {
-    "pro": ["haiku", "sonnet", "opus"],
-    "max": ALL_MODELS,
-    "team": ALL_MODELS,
-    "enterprise": ALL_MODELS,
-    "api": ALL_MODELS,
-}
-MODEL_NAMES = {"haiku": "Haiku 5.5", "sonnet": "Sonnet 5.5", "opus": "Opus 5.5", "fable": "Fable 5.1"}
-# Modelo de cada agente e para onde ele vai quando esse modelo não existe no plano.
-AGENT_MODELS = {
-    "scout": "haiku", "log-reader": "haiku", "verifier": "haiku", "researcher": "sonnet",
-    "ideator": "opus", "implementer": "opus", "implementer-high": "opus", "implementer-fable": "fable",
-    "quick-edit": "haiku",
-}
-FALLBACKS = {"haiku": ["sonnet", "opus"], "sonnet": ["opus", "haiku"], "opus": ["sonnet"], "fable": []}
 
 
 def base_dir():
     return Path(os.environ.get("TOKEN_PILOT_STATE_DIR", Path.home() / ".claude" / "token-pilot"))
 
 
-def read_json(path):
-    try:
-        return json.loads(Path(path).read_text())
-    except (OSError, ValueError, TypeError):
-        return {}
-
-
-def parse_models(value):
-    items = value if isinstance(value, list) else str(value).split(",")
-    found = []
-    for item in items:
-        for m in ALL_MODELS:  # aceita apelido ("opus") ou ID completo ("claude-opus-5-5")
-            if m in str(item).lower() and m not in found:
-                found.append(m)
-    return found
-
-
-def settings_allowlist():
-    """availableModels das configurações do Claude Code, se alguém definiu."""
-    project = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
-    files = [Path.home() / ".claude" / "settings.json",
-             Path(project) / ".claude" / "settings.json",
-             Path(project) / ".claude" / "settings.local.json"]
-    allowed = None
-    for f in files:
-        value = read_json(f).get("availableModels")
-        if value:
-            allowed = parse_models(value)
-    return allowed
-
-
-def autodetect_plan():
-    """Tentativa sem garantia: procura um campo de plano nos arquivos locais do Claude Code."""
-    keys = {"subscriptiontype", "subscription_type", "plantype", "plan", "tier"}
-
-    def walk(obj, depth=0):
-        if isinstance(obj, dict) and depth < 4:
-            for k, v in obj.items():
-                if k.lower() in keys and isinstance(v, str):
-                    for plan in PLAN_MODELS:
-                        if plan in v.lower():
-                            return plan
-                found = walk(v, depth + 1)
-                if found:
-                    return found
-        return None
-
-    for f in (Path.home() / ".claude" / ".credentials.json", Path.home() / ".claude.json"):
-        plan = walk(read_json(f))
-        if plan:
-            return plan
-    return None
-
-
-def resolve_models():
-    """Devolve (modelos disponíveis, de onde veio a informação)."""
-    config = read_json(base_dir() / "config.json")
-    if os.environ.get("TOKEN_PILOT_MODELS"):
-        models, source = parse_models(os.environ["TOKEN_PILOT_MODELS"]), "TOKEN_PILOT_MODELS"
-    elif config.get("models"):
-        models, source = parse_models(config["models"]), "config.json"
-    elif os.environ.get("TOKEN_PILOT_PLAN", "").lower() in PLAN_MODELS:
-        plan = os.environ["TOKEN_PILOT_PLAN"].lower()
-        models, source = PLAN_MODELS[plan], f"plano {plan} (TOKEN_PILOT_PLAN)"
-    elif str(config.get("plan", "")).lower() in PLAN_MODELS:
-        plan = config["plan"].lower()
-        models, source = PLAN_MODELS[plan], f"plano {plan} (config.json)"
-    elif autodetect_plan():
-        plan = autodetect_plan()
-        models, source = PLAN_MODELS[plan], f"plano {plan} (detectado)"
-    else:
-        models, source = ALL_MODELS, "desconhecido"
-    allowed = settings_allowlist()
-    if allowed:
-        models = [m for m in models if m in allowed]
-        source += " + availableModels"
-    return list(models), source
-
-
-def model_for(agent, models):
-    """Modelo que o agente deve usar neste plano, ou None se o nível não existe."""
-    wanted = AGENT_MODELS[agent]
-    if wanted in models:
-        return wanted
-    return next((m for m in FALLBACKS[wanted] if m in models), None)
-
-
-def session_rules(models, source):
+def session_rules():
     """Núcleo curto de regras para toda sessão. O resto (disciplina de edição, mapa do código,
     instruções da tarefa) entra pelo UserPromptSubmit só quando a tarefa pede."""
-    names = ", ".join(MODEL_NAMES[m] for m in models) or "nenhum"
-    has_fable = model_for("implementer-fable", models) is not None
-    ladder = ("2x nele -> implementer-fable" if has_fable else
-              "2x nele -> pare e peça ajuda (sem Fable no plano; não use /escalate)")
-    lines = [
-        f"[Token Pilot] Regras (modelos do plano: {names}; fonte: {source}):",
-        "- Delegue: mudança mecânica -> quick-edit (Haiku 5.5); busca -> scout; log longo -> log-reader;",
-        "  suíte longa -> verifier; fluxo em vários arquivos -> researcher (Sonnet 5.5). Edite aqui.",
-        "- Tarefa grande em projeto grande -> skill big-task.",
-        f"- Mesma parte falhou 2x -> implementer-high; {ladder}. Nunca peça para trocar /model ou /effort.",
-    ]
-    overrides = [f"{agent} -> model: \"{got}\"" for agent, wanted in AGENT_MODELS.items()
-                 if (got := model_for(agent, models)) and got != wanted]
-    if overrides:
-        lines.append("- Fora do plano, passe model: " + "; ".join(overrides) + ".")
-    lines.append("- Subagente sem o modelo, recusou ou voltou vazio -> refaça com model: \"sonnet\" "
-                 "(se era Sonnet, \"opus\"). Como plugin, os agentes têm prefixo (token-pilot:scout).")
-    return "\n".join(lines)
+    return "\n".join([
+        "[Token Pilot] Regras (aplique sem esperar comando):",
+        "- Você coordena e não edita código: divida a tarefa em partes por área (ex.: tela, API,",
+        "  banco, testes) e mande cada parte ao subagente certo, em paralelo quando não tocarem os",
+        "  mesmos arquivos. Passe a cada um só a parte dele e junte os resultados.",
+        "- Implementar ou corrigir -> implementer (Opus 5.5). Mudança mecânica -> quick-edit (Haiku 5.5).",
+        "  Buscar -> scout. Log longo -> log-reader. Testes -> verifier (Haiku 5.5). Entender um fluxo",
+        "  -> researcher (Sonnet 5.5). Decidir entre caminhos -> ideator (Opus 5.5, high).",
+        "- Tarefa grande -> skill big-task. Parte falhou 2x no implementer -> implementer-high;",
+        "  2x nele -> pare, resuma e peça ajuda.",
+        "- Não troque nem peça para trocar o /model ou o /effort desta sessão.",
+        "- Haiku 5.5 recusou ou voltou vazio -> refaça com model: \"sonnet\". Como plugin, os agentes",
+        "  têm prefixo (token-pilot:scout).",
+    ])
 
 # ---------------------------------------------------------------- disciplina e mapa
 
@@ -209,7 +98,7 @@ HOOK_DIR = Path(__file__).resolve().parent
 # Agentes que só leem recebem a disciplina curta; os demais, a de edição.
 READ_ONLY_AGENTS = {"scout", "log-reader", "verifier", "researcher", "ideator", "explore", "plan", "quick-edit"}
 # Agentes que recebem o mapa do código (os que leem ou editam código, não logs).
-MAP_AGENTS = {"scout", "researcher", "ideator", "implementer", "implementer-high", "implementer-fable",
+MAP_AGENTS = {"scout", "researcher", "ideator", "implementer", "implementer-high",
               "general-purpose", "explore", "plan"}
 MAP_BUDGET = int(os.environ.get("TOKEN_PILOT_MAP_CHARS", "2000"))
 MAP_SECONDS = 2.0
@@ -232,7 +121,7 @@ for ext in (".kt", ".cs", ".swift"):
 
 
 def discipline(section):
-    """Texto da disciplina de resposta ("edição" ou "leitura"), lido de disciplina.md."""
+    """Texto da disciplina de resposta ("coordenação", "edição" ou "leitura"), lido de disciplina.md."""
     try:
         text = (HOOK_DIR / "disciplina.md").read_text(encoding="utf-8")
     except OSError:
@@ -309,20 +198,6 @@ def code_map(root, budget=MAP_BUDGET):
     return "\n".join(lines)
 
 
-def small_project(root):
-    """True se o código do projeto (sem testes) cabe em SMALL_PROJECT_KB."""
-    limit, total = SMALL_PROJECT_KB * 1024, 0
-    for rel in project_files(root):
-        if os.path.splitext(rel)[1] in SYMBOL_PATTERNS and not is_test_or_generated(rel):
-            try:
-                total += os.path.getsize(os.path.join(root, rel))
-            except OSError:
-                continue
-            if total > limit:
-                return False
-    return True
-
-
 def project_root(data):
     return data.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
 
@@ -339,7 +214,6 @@ def subagent_context(agent_type, root):
 ACTIONS = {
     "big_task": "Siga a skill big-task agora para esta tarefa, sem esperar /big-task.",
     "boost": "Delegue a próxima tentativa ao subagente implementer-high, passando o que já falhou.",
-    "escalate": "Delegue a próxima tentativa ao subagente implementer-fable, passando o que já falhou.",
     "stuck": "Não delegue a outro nível: pare, resuma as tentativas e o que falhou, e peça ajuda ao usuário.",
 }
 
@@ -362,9 +236,10 @@ BUILD_PATTERNS = [
 
 QUICK_CONTEXT = ("[Token Pilot] Tarefa mecânica: delegue ao subagente quick-edit (Haiku 5.5) com a instrução "
                  "exata, sem ler os arquivos antes. Ele já confere o resultado e separa falhas que já existiam: se "
-                 "devolver OK, não verifique de novo e responda em 1 linha. Se devolver PRECISA_OPUS ou FALHOU, faça você mesmo.")
-SHORT_CONTEXT = ("[Token Pilot] Tarefa curta: resolva direto, sem plano e sem resumo; leia só o necessário e "
-                 "responda em até 3 linhas. Só use subagente para ler saída longa (log-reader).")
+                 "devolver OK, não verifique de novo e responda em 1 linha. Se devolver PRECISA_OPUS ou FALHOU, "
+                 "mande ao implementer.")
+SHORT_CONTEXT = ("[Token Pilot] Tarefa curta: sem plano e sem resumo. Pergunta: responda direto em até 3 linhas. "
+                 "Mudança de código: mande ao implementer (Opus 5.5) com a instrução exata e responda em 1 linha.")
 
 
 def task_kind(prompt):
@@ -411,7 +286,7 @@ def transcript_mb(transcript_path):
         return 0.0
 
 
-def decide(state, prompt, transcript_path, models=ALL_MODELS, root=None):
+def decide(state, prompt, transcript_path):
     """Atualiza o estado e devolve (chave_da_dica, texto) ou (None, None)."""
     state["prompts"] += 1
     state["since_compact"] += 1
@@ -427,8 +302,8 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS, root=None):
         state["level"] = 1
         if was_raised:
             return "resolved", (
-                "Problema resolvido depois de subir de nível. As próximas partes voltam para a "
-                "sessão principal (Opus 5.5, medium). Se você trocou o modelo à mão, use /model opus e /effort medium."
+                "Problema resolvido depois de subir de nível. As próximas partes voltam para o "
+                "implementer (Opus 5.5, medium)."
             )
         return None, None
 
@@ -440,34 +315,25 @@ def decide(state, prompt, transcript_path, models=ALL_MODELS, root=None):
 
     if matches(STALL_PATTERNS, prompt):
         state["stalls"] += 1
-        if state["stalls"] >= STALLS_TO_ESCALATE and state["level"] < 3:
+        if state["stalls"] >= STALLS_TO_STOP and state["level"] < 3:
             state["level"] = 3
-            if model_for("implementer-fable", models) is None:
-                return "stuck", (
-                    f"{state['stalls']} falhas seguidas no mesmo problema, já no high. Seu plano não "
-                    "tem Fable, então o Claude vai parar, resumir o que falhou e pedir sua ajuda."
-                )
-            return "escalate", (
-                f"{state['stalls']} falhas seguidas no mesmo problema, já no high. "
-                "A próxima tentativa vai para o subagente implementer-fable "
-                f"({MODEL_NAMES[model_for('implementer-fable', models)]}), com o histórico das falhas."
+            return "stuck", (
+                f"{state['stalls']} falhas seguidas no mesmo problema, já no high. O Claude vai parar, "
+                "resumir o que falhou e pedir sua ajuda."
             )
         if state["stalls"] >= STALLS_TO_BOOST and state["level"] < 2:
             state["level"] = 2
-            high = model_for("implementer-high", models) or "opus"
             return "boost", (
-                f"{state['stalls']} falhas seguidas no mesmo problema no medium. "
-                f"A próxima tentativa vai para o subagente implementer-high ({MODEL_NAMES[high]}, high), "
-                "com o histórico das falhas."
+                f"{state['stalls']} falhas seguidas no mesmo problema. A próxima tentativa vai para o "
+                "subagente implementer-high (Opus 5.5, high), com o histórico das falhas."
             )
         return None, None
 
-    if (is_big_task(prompt) and state["prompts"] - state.get("big_task_at", -99) > 5
-            and not (root and small_project(root))):
+    if is_big_task(prompt) and state["prompts"] - state.get("big_task_at", -99) > 5:
         state["big_task_at"] = state["prompts"]
         return "big_task", (
-            "Tarefa grande detectada. O Claude vai dividir em análise (Haiku 5.5/Sonnet 5.5), "
-            "brainstorm (Opus high) e execução na sessão principal (Opus medium, subindo se travar)."
+            "Tarefa grande detectada. O Claude vai dividir por área e delegar: análise no Haiku 5.5 e "
+            "Sonnet 5.5, decisão no Opus 5.5 high e cada parte no implementer (Opus 5.5)."
         )
 
     too_long = state["since_compact"] >= PROMPTS_TO_COMPACT or (
@@ -489,8 +355,6 @@ def main():
     except ValueError:
         return 0
 
-    models, source = resolve_models()
-
     event = data.get("hook_event_name")
     if event == "SubagentStart":
         context = subagent_context(data.get("agent_type") or data.get("subagent_type"), project_root(data))
@@ -500,26 +364,15 @@ def main():
         return 0
 
     if event == "SessionStart":
-        context = session_rules(models, source)
-        out = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": context}}
-        notice = base_dir() / ".plan-notice"
-        if source.startswith("desconhecido") and not notice.exists():
-            out["systemMessage"] = ("💡 Token Pilot: não sei qual é o seu plano. Rode "
-                                    f"`python3 \"{Path(__file__).resolve()}\" --plan pro` (ou max, team, "
-                                    "enterprise, api) para usar só os modelos que você tem.")
-            try:
-                base_dir().mkdir(parents=True, exist_ok=True)
-                notice.touch()
-            except OSError:
-                pass
-        print(json.dumps(out, ensure_ascii=False))
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": "SessionStart",
+                                                 "additionalContext": session_rules()}}, ensure_ascii=False))
         return 0
 
     prompt = data.get("prompt") or ""
     path = state_path(data.get("session_id", ""))
     state = load_state(path)
 
-    key, hint = decide(state, prompt, data.get("transcript_path"), models, project_root(data))
+    key, hint = decide(state, prompt, data.get("transcript_path"))
     if key and key == state.get("last_hint") and key not in ("compact",):
         key, hint = None, None  # não repete a mesma dica
     if key:
@@ -547,9 +400,9 @@ def main():
 
 
 def task_context(state, prompt, key, root):
-    """Contexto silencioso conforme o tamanho da tarefa. Disciplina de edição e mapa do código
+    """Contexto silencioso conforme o tamanho da tarefa. Disciplina da coordenadora e mapa do código
     entram uma vez por sessão, só quando a tarefa é média ou grande."""
-    if (key in ("boost", "escalate", "stuck", "resolved") or prompt.strip().startswith("/")
+    if (key in ("boost", "stuck", "resolved") or prompt.strip().startswith("/")
             or matches(STALL_PATTERNS, prompt) or matches(RESOLVED_PATTERNS, prompt)):
         return []
     kind = task_kind(prompt)
@@ -560,33 +413,10 @@ def task_context(state, prompt, key, root):
     if state.get("work_context_sent"):
         return []
     state["work_context_sent"] = True
-    return [p for p in (discipline("edição"), code_map(root)) if p]
-
-
-def cli(args):
-    """python3 token_pilot.py --plan pro | --models haiku,sonnet,opus | --show"""
-    path = base_dir() / "config.json"
-    config = read_json(path)
-    if args[0] == "--plan" and len(args) > 1 and args[1].lower() in PLAN_MODELS:
-        config = {"plan": args[1].lower()}
-    elif args[0] == "--models" and len(args) > 1 and parse_models(args[1]):
-        config = {"models": parse_models(args[1])}
-    elif args[0] != "--show":
-        print("Uso: token_pilot.py --plan <" + "|".join(PLAN_MODELS) + "> | --models haiku,sonnet,opus | --show")
-        return 2
-    if args[0] != "--show":
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(config))
-    models, source = resolve_models()
-    print(f"Modelos: {', '.join(MODEL_NAMES[m] for m in models)} (fonte: {source})")
-    fable = model_for("implementer-fable", models)
-    print("Escada: implementer -> implementer-high" + (" -> implementer-fable" if fable else " (sem Fable: para e pede ajuda)"))
-    return 0
+    return [p for p in (discipline("coordenação"), code_map(root)) if p]
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        sys.exit(cli(sys.argv[1:]))
     try:
         sys.exit(main())
     except Exception:  # o hook nunca pode travar a sessão

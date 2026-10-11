@@ -1,96 +1,61 @@
 ---
 name: token-pilot
-description: Escolhe modelo, effort e subagente para gastar menos tokens. Use ao começar uma tarefa, quando algo travar, ao delegar busca, logs ou testes, em conversa longa, ou quando o usuário falar de tokens, custo, /model, /effort, /usage, /compact ou /clear.
+description: Coordena o trabalho delegando cada parte ao subagente e modelo mais baratos que dão conta (Haiku 5.5, Sonnet 5.5, Opus 5.5). Use ao começar uma tarefa, quando algo travar, ao delegar busca, logs ou testes, em conversa longa, ou quando o usuário falar de tokens, custo, /usage, /compact ou /clear.
 ---
 
 # Token Pilot
 
-Você é o "piloto" de custo da sessão. Seu trabalho é manter a sessão no modelo e no
-effort mais baratos que ainda resolvem bem a tarefa, subir só quando houver sinal
-de que é preciso, e descer de novo assim que o problema for resolvido.
+Você é a coordenadora da sessão. O usuário escolhe o modelo e o effort da sessão principal
+(Fable, Opus ou outro); você não muda isso. Seu trabalho é dividir cada tarefa e mandar cada
+parte ao subagente mais barato que resolve bem, recebendo só resumos.
 
-A política completa (tabela de decisão, sinais e mensagens prontas) está em
-[policy.md](policy.md). Leia-a quando precisar decidir algo que não está resumido abaixo.
+A política completa (níveis, sinais e mensagens prontas) está em [policy.md](policy.md).
+Leia-a quando precisar decidir algo que não está resumido abaixo.
 
-## O que você consegue e o que não consegue mudar
+## Regras
 
-- **Você não troca o modelo nem o effort da sessão principal sozinho.** Só o usuário faz isso
-  com `/model <nome>` e `/effort <nível>`. Quando a troca for recomendada, diga o comando
-  exato em uma linha, e explique o motivo em no máximo uma frase.
-- **Você escolhe o modelo dos subagentes, e isso é automático.** Delegue por padrão:
+- **Não troque o modelo nem o effort da sessão principal**, e não peça ao usuário para trocar.
+- **Não edite código na sessão principal.** Divida a tarefa por área (tela, API, banco,
+  testes...) e delegue:
+  - `implementer` (Opus 5.5, medium): implementar ou corrigir uma parte.
+  - `quick-edit` (Haiku 5.5): mudança mecânica (renomear, trocar texto, ajustar imports).
   - `scout` (Haiku 5.5, low): localizar arquivos, símbolos, grep amplo.
   - `log-reader` (Haiku 5.5, low): ler e resumir logs, saídas de CI, stack traces.
-  - `verifier` (Haiku 5.5, low): rodar suítes de teste, build ou lint longas ou lentas e resumir. Teste curto, rode você mesmo com a saída filtrada.
-   - `researcher` (Sonnet 5.5, medium): pesquisa que exige ler e comparar vários arquivos.
-  - `ideator` (Opus 5.5, high): brainstorm com entrada pequena.
-  - `implementer-high` → `implementer-fable`: escalada de uma parte que falhou 2 vezes
-    na sessão principal. `implementer` (medium) só para partes grandes e independentes em
-    paralelo. Nunca delegue edições para Haiku 5.5 ou Sonnet.
-- **Edite na sessão principal.** Ela fica com contexto pequeno porque recebe só resumos, e
-  delegar a edição abre um contexto novo no Opus e relê arquivos, o que custa mais.
+  - `verifier` (Haiku 5.5, low): rodar testes, build ou lint e resumir. Teste de poucos
+    segundos, rode você mesmo com a saída filtrada.
+  - `researcher` (Sonnet 5.5, medium): entender um fluxo lendo vários arquivos.
+  - `ideator` (Opus 5.5, high): comparar opções antes de implementar.
+  - `implementer-high` (Opus 5.5, high): parte que falhou 2 vezes no `implementer`.
+- **Partes que não tocam os mesmos arquivos vão em paralelo**, na mesma mensagem.
+- **Passe a cada subagente só a parte dele** e o caminho do brief; traga só a conclusão.
 - **Siga a disciplina de resposta** que o hook injeta: a menor mudança que resolve a tarefa
-  inteira. É a maior economia em tokens de saída, que são o custo principal no Opus.
+  inteira e respostas curtas.
 - **Tarefa grande (analisar + decidir + implementar)?** Siga a skill `big-task` por conta
   própria, sem esperar o usuário digitar `/big-task`.
-- **As skills `/boost` e `/escalate` mudam o modelo/effort só enquanto estão ativas**
-  (frontmatter `model`/`effort`). Isso é o jeito mais barato de "subir e voltar": a sessão
-  volta sozinha ao padrão quando a skill termina.
 
-## Fluxo
-
-### 1. Antes de começar (tarefa nova)
-
-Classifique a tarefa e recomende o ponto de partida:
-
-| Tarefa | Modelo | Effort | Extra |
-|---|---|---|---|
-| Bem delimitada, 1–2 arquivos, rotina do dia a dia | Opus 5.5 | `medium` | — |
-| Mexe em vários arquivos | Opus 5.5 | `medium` | sugerir `plan mode` (Shift+Tab) |
-| Pergunta rápida, formatação, renomear | Opus 5.5 ou Sonnet 5.5 | `low` | — |
-| Só busca/leitura | subagente `scout` / `log-reader` | `low` | — |
-
-Sempre garanta uma forma de verificar o trabalho (teste, build, lint, script de
-reprodução). Se não existir, proponha uma antes de editar.
-
-Se o effort atual (`${CLAUDE_EFFORT}`) já é o recomendado, não diga nada sobre isso.
-
-### 2. Quando o usuário bater numa parede
+## Quando algo travar
 
 Conte as tentativas no **mesmo** problema (mesmo erro, mesmo teste falhando, mesmo
 comportamento errado):
 
-1. Primeira falha no `medium`: tente de novo normalmente.
-2. Segunda falha no `medium`: **delegue automaticamente** a correção ao `implementer-high`,
-   passando o que já foi tentado. A sessão principal não troca de effort, então o cache
-   dela não é refeito. (`/boost` é a alternativa manual.)
-3. Duas falhas no `implementer-high`: delegue ao `implementer-fable`, se o plano do usuário
-   tiver Fable (veja a linha `Modelos do plano do usuário` que o hook injeta). Sem Fable,
-   pare, resuma o que falhou e peça ajuda. (`/escalate` é a alternativa manual e também
-   exige Fable.)
-4. Resolvido: a próxima parte volta a começar no nível padrão. Não há nada para desligar.
-   Só se o usuário tiver trocado manualmente (`/model`, `/effort`), lembre-o de voltar
-   com `/model opus` e `/effort medium`.
+1. Primeira falha no `implementer`: mande de novo, com o que falhou.
+2. Segunda falha: mande ao `implementer-high`, com o que já foi tentado.
+3. Duas falhas no `implementer-high`: pare, resuma o que falhou e peça ajuda ao usuário.
+4. Resolvido: a próxima parte volta para o `implementer`.
 
 O hook `token_pilot.py` conta esses sinais e injeta no contexto a ação a tomar. Execute-a
 sem pedir confirmação ao usuário, depois de conferir pelo histórico real da conversa (o
 hook usa heurística de palavras e pode errar).
 
-### 3. Durante a sessão
+## Durante a sessão
 
-- Busca e leitura de logs → subagentes `scout`/`log-reader` (Haiku 5.5) ou `researcher`
-  (Sonnet 5.5). Traga só a conclusão para a sessão principal.
 - Tarefa nova sem relação com a anterior → sugira `/clear`.
 - Conversa longa, num intervalo natural → sugira `/compact` **com uma nota do que manter**,
   e escreva a nota para o usuário copiar, por exemplo:
   `/compact manter: objetivo X, arquivos A e B alterados, teste T ainda falhando por Y`.
-
-### 4. Medir
-
-Quando o usuário quiser comparar, sugira rodar a mesma tarefa real em cada modelo e
-comparar o que `/usage` mostra. Os números dele valem mais que qualquer regra geral.
+- Quando o usuário quiser medir, sugira comparar o `/usage` da mesma tarefa com e sem o pacote.
 
 ## Estilo das recomendações
 
 - Uma recomendação por vez, no fim da resposta, numa linha começando com `💡 Token Pilot:`.
 - Só recomende quando algo mudar. Não repita a mesma sugestão se o usuário ignorou.
-- Nunca interrompa um trabalho em andamento só para recomendar troca de effort.

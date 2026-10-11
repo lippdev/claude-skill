@@ -14,12 +14,7 @@ HOOK = Path(__file__).resolve().parent.parent / ".claude" / "hooks" / "token_pil
 
 class HookSession:
     def __init__(self, state_dir, session="teste", **env):
-        # Limite 0: o projeto atual conta como grande, salvo quando o teste pede outro.
-        self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir, HOME=state_dir,
-                        **{"TOKEN_PILOT_SMALL_PROJECT_KB": "0", **env})
-        for key in ("TOKEN_PILOT_MODELS", "TOKEN_PILOT_PLAN"):
-            if key not in env:
-                self.env.pop(key, None)
+        self.env = dict(os.environ, TOKEN_PILOT_STATE_DIR=state_dir, HOME=state_dir, **env)
         self.session = session
 
     def run(self, data):
@@ -52,14 +47,17 @@ class TestHook(unittest.TestCase):
         self.assertIsNone(self.s.send("o teste ainda não passa"))
         self.assertIn("implementer-high", self.s.send("continua dando o mesmo erro"))
         self.assertIsNone(self.s.send("ainda não funcionou"))
-        self.assertIn("implementer-fable", self.s.send("de novo o mesmo erro"))
-        self.assertIn("voltam para a sessão principal", self.s.send("funcionou, valeu!"))
+        self.assertIn("pedir sua ajuda", self.s.send("de novo o mesmo erro"))
+        self.assertIn("voltam para o implementer", self.s.send("funcionou, valeu!"))
 
     def test_regras_no_inicio_da_sessao(self):
         out = self.s.run(json.dumps({"hook_event_name": "SessionStart", "session_id": "x"}))
         ctx = out["hookSpecificOutput"]["additionalContext"]
-        for agente in ("scout", "big-task", "implementer-high", "implementer-fable"):
+        for agente in ("scout", "big-task", "implementer", "implementer-high", "researcher"):
             self.assertIn(agente, ctx)
+        self.assertIn("não edita código", ctx)
+        self.assertNotIn("Fable", ctx)
+        self.assertNotIn("systemMessage", out)
 
     def test_tarefa_grande_aciona_big_task_sozinha(self):
         ctx = self.s.context("analisa o módulo de pagamento, me dá ideias de melhorias e implementa")
@@ -72,15 +70,6 @@ class TestHook(unittest.TestCase):
         self.s.send("analisa o carrinho e implementa cupons")
         self.s.send("ok")
         self.assertIsNone(self.s.send("analisa o frete e implementa isso também"))
-
-    def test_projeto_pequeno_nao_aciona_big_task(self):
-        s = HookSession(self.tmp.name, session="pequeno", TOKEN_PILOT_SMALL_PROJECT_KB="150")
-        Path(self.tmp.name, "app.py").write_text("def main():\n    pass\n")
-        out = s.run(json.dumps({"session_id": "pequeno", "cwd": self.tmp.name,
-                                "prompt": "analisa o módulo de pagamento e implementa reembolso"}))
-        ctx = out["hookSpecificOutput"]["additionalContext"]
-        self.assertNotIn("big-task", ctx)
-        self.assertIn("Disciplina de resposta", ctx)
 
     def test_pedido_simples_nao_aciona_big_task(self):
         self.assertIsNone(self.s.send("corrige o typo no README"))
@@ -101,7 +90,7 @@ class TestHook(unittest.TestCase):
     def test_nova_parede_depois_de_resolver(self):
         self.s.send("mesmo erro")
         self.assertIsNotNone(self.s.send("mesmo erro"))
-        self.assertIn("voltam para a sessão principal", self.s.send("resolvido"))  # resolve e zera
+        self.assertIn("voltam para o implementer", self.s.send("resolvido"))  # resolve e zera
         self.s.send("mesmo erro")
         self.assertIsNotNone(self.s.send("mesmo erro"))  # nova parede, nova dica
 
@@ -111,74 +100,6 @@ class TestHook(unittest.TestCase):
 
     def test_entrada_invalida_nao_trava(self):
         self.assertIsNone(self.s.send("", raw="{quebrado"))
-
-
-class TestPlano(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory()
-
-    def tearDown(self):
-        self.tmp.cleanup()
-
-    def regras(self, **env):
-        s = HookSession(self.tmp.name, **env)
-        out = s.run(json.dumps({"hook_event_name": "SessionStart", "session_id": "p"}))
-        return out, out["hookSpecificOutput"]["additionalContext"]
-
-    def escada(self, **env):
-        s = HookSession(self.tmp.name, **env)
-        return [s.send(m) for m in ("mesmo erro",) * 4]
-
-    def test_pro_sem_fable_para_e_pede_ajuda(self):
-        _, ctx = self.regras(TOKEN_PILOT_PLAN="pro")
-        self.assertIn("plano pro", ctx)
-        self.assertNotIn("Fable 5.1 (", ctx)
-        self.assertIn("pare e peça ajuda (sem Fable no plano", ctx)
-        msgs = self.escada(TOKEN_PILOT_PLAN="pro")
-        self.assertIn("implementer-high", msgs[1])
-        self.assertIn("não tem Fable", msgs[3])
-        self.assertNotIn("implementer-fable", msgs[3])
-
-    def test_max_usa_fable(self):
-        _, ctx = self.regras(TOKEN_PILOT_PLAN="max")
-        self.assertIn("-> implementer-fable", ctx)
-        self.assertIn("Sonnet 5.5", ctx)
-        self.assertIn("implementer-fable", self.escada(TOKEN_PILOT_PLAN="max")[3])
-
-    def test_sonnet_55_no_plano_pro_e_id_explicito(self):
-        _, ctx = self.regras(TOKEN_PILOT_PLAN="pro")
-        self.assertIn("Haiku 5.5, Sonnet 5.5, Opus 5.5", ctx)
-        self.assertIn("researcher (Sonnet 5.5)", ctx)
-        _, ctx = self.regras(TOKEN_PILOT_MODELS="claude-sonnet-5-5,claude-opus-5-5")
-        self.assertIn("Sonnet 5.5, Opus 5.5", ctx)
-
-    def test_sem_opus_troca_modelo_dos_agentes(self):
-        _, ctx = self.regras(TOKEN_PILOT_MODELS="haiku,sonnet")
-        self.assertIn('implementer -> model: "sonnet"', ctx)
-        self.assertIn("Sonnet 5.5, high", self.escada(TOKEN_PILOT_MODELS="haiku,sonnet")[1])
-
-    def test_plano_desconhecido_avisa_uma_vez(self):
-        out, _ = self.regras()
-        self.assertIn("--plan", out["systemMessage"])
-        out, _ = self.regras()
-        self.assertNotIn("systemMessage", out)
-
-    def test_cli_grava_plano(self):
-        env = dict(os.environ, TOKEN_PILOT_STATE_DIR=self.tmp.name, HOME=self.tmp.name)
-        env.pop("TOKEN_PILOT_PLAN", None); env.pop("TOKEN_PILOT_MODELS", None)
-        out = subprocess.run([sys.executable, str(HOOK), "--plan", "pro"], capture_output=True,
-                             text=True, env=env, check=True).stdout
-        self.assertIn("sem Fable", out)
-        _, ctx = self.regras()
-        self.assertIn("plano pro (config.json)", ctx)
-
-    def test_available_models_restringe(self):
-        proj = Path(self.tmp.name) / "proj" / ".claude"
-        proj.mkdir(parents=True)
-        (proj / "settings.json").write_text(json.dumps({"availableModels": ["sonnet", "claude-opus-5-5"]}))
-        _, ctx = self.regras(TOKEN_PILOT_PLAN="max", CLAUDE_PROJECT_DIR=str(proj.parent))
-        self.assertIn("Sonnet 5.5, Opus 5.5; fonte: plano max (TOKEN_PILOT_PLAN) + availableModels", ctx)
-        self.assertIn('scout -> model: "sonnet"', ctx)
 
 
 class TestDisciplinaEMapa(unittest.TestCase):

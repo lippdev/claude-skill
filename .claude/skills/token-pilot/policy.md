@@ -1,19 +1,27 @@
 # Política do Token Pilot
 
-Baseada no guia "Making Opus 5.5 your daily driver". Opus 5.5 custa 20% menos por
-token que o Opus 5 e 60% menos em leituras de cache, então a regra geral é: fique no
-Opus 5.5 com effort `medium` e só saia disso com motivo. Sonnet 5.5 custa menos
-($2/$10 por milhão de tokens de entrada/saída contra $4/$20 do Opus 5.5):
-use-o para pesquisa e leitura de vários arquivos, sem delegar edição a ele.
+A sessão principal roda no modelo que o usuário escolheu e só coordena. O trabalho vai para
+subagentes em três modelos, todos disponíveis desde o plano Pro:
 
-## Níveis
+- Haiku 5.5 ($0,10/$0,50 por milhão de tokens de entrada/saída): busca, logs, testes,
+  mudança mecânica.
+- Sonnet 5.5 ($2/$10): pesquisa que exige ler e comparar vários arquivos.
+- Opus 5.5 ($4/$20): implementação e decisão.
 
-| Nível | Modelo | Effort | Quando | Como entrar | Como sair |
-|---|---|---|---|---|---|
-| 0 – Leve | Haiku 5.5 / Sonnet 5.5 (subagente) | `low`/`medium` | Busca, logs, testes, pesquisa | `scout`, `log-reader`, `verifier`, `researcher` | termina sozinho |
-| 1 – Padrão | Opus 5.5 | `medium` | Trabalho diário bem delimitado | `/model opus` + `/effort medium` | — |
-| 2 – Reforço | Opus 5.5 | `high` | 2 falhas no mesmo problema no nível 1 | subagente `implementer-high` (manual: `/boost`) | automático ao terminar |
-| 3 – Escalada | Fable 5.1 | `high` | 2 falhas no mesmo problema no nível 2 | subagente `implementer-fable` (manual: `/escalate`) | automático ao terminar |
+Quanto mais cara a sessão principal (por exemplo, Fable 5.1 a $10/$50), maior a economia de
+manter a leitura e a edição fora dela.
+
+## Níveis dos subagentes
+
+| Nível | Agente | Modelo | Effort | Quando |
+|---|---|---|---|---|
+| 0 – Leitura | `scout`, `log-reader`, `verifier` | Haiku 5.5 | `low` | Busca, logs, testes |
+| 0 – Leitura | `researcher` | Sonnet 5.5 | `medium` | Entender um fluxo |
+| 0 – Mecânico | `quick-edit` | Haiku 5.5 | `medium` | Renomear, trocar texto, imports |
+| 1 – Padrão | `implementer` | Opus 5.5 | `medium` | Implementar ou corrigir uma parte |
+| 1 – Decisão | `ideator` | Opus 5.5 | `high` | Comparar opções |
+| 2 – Reforço | `implementer-high` | Opus 5.5 | `high` | 2 falhas no mesmo problema no nível 1 |
+| — | a coordenadora pede ajuda | — | — | 2 falhas no nível 2 |
 
 ## Sinais de "parede"
 
@@ -22,7 +30,7 @@ Conte como falha no mesmo problema quando:
 - o mesmo teste/comando continua falhando com o mesmo erro depois de uma correção;
 - o usuário diz que ainda não funciona ("ainda", "de novo", "continua", "mesmo erro",
   "still", "again", "same error");
-- você propôs a mesma abordagem duas vezes;
+- o subagente propôs a mesma abordagem duas vezes;
 - a correção de um erro gerou outro no mesmo ponto e voltou ao erro original.
 
 Não conte como falha: erro novo e diferente que mostra progresso, pedido de ajuste de
@@ -31,27 +39,18 @@ estilo, ou tarefa nova.
 ## Sinais de "resolvido"
 
 Teste passando, usuário confirma ("funcionou", "resolvido", "deu certo", "works",
-"fixed"), ou o usuário muda de assunto. Ao ver isso depois de subir de nível,
-recomende voltar ao nível 1.
+"fixed"), ou o usuário muda de assunto. Ao ver isso depois de subir de nível, a próxima
+parte volta para o `implementer`.
 
-## Por que trocar só em intervalos
+## Por que a sessão principal não troca de modelo
 
-Trocar modelo ou effort invalida o cache do prompt e força uma nova escrita de cache.
-Por isso:
-
-- não recomende troca no meio de uma sequência de edições;
-- prefira `/boost` e `/escalate`, que valem só para uma tarefa e evitam esquecer o
-  nível alto ligado;
-- junte a troca com um `/compact` quando os dois forem úteis, já que ambos custam uma
-  escrita de cache.
+Trocar modelo ou effort invalida o cache do prompt e força uma nova escrita de cache. Os
+subagentes resolvem a necessidade de outro modelo sem tocar no cache da sessão principal.
 
 ## Mensagens prontas
 
-- Início: `💡 Token Pilot: tarefa bem delimitada, /effort medium basta.`
-- Multi-arquivo: `💡 Token Pilot: vai mexer em vários arquivos, vale entrar em plan mode (Shift+Tab) antes.`
-- Parede 1: `💡 Token Pilot: segunda falha no mesmo erro. Passando a correção para o implementer-high (Opus 5.5, high).`
-- Parede 2: `💡 Token Pilot: o high também travou duas vezes. Passando para o implementer-fable (Fable 5.1).`
-- Resolvido: `💡 Token Pilot: resolvido. A próxima parte volta para a sessão principal (Opus 5.5, medium).`
+- Parede: `💡 Token Pilot: segunda falha no mesmo erro. Passando a parte para o implementer-high (Opus 5.5, high).`
+- Parede no high: `💡 Token Pilot: o high também travou duas vezes. Parando para você decidir: <resumo>.`
+- Resolvido: `💡 Token Pilot: resolvido. A próxima parte volta para o implementer (Opus 5.5, medium).`
 - Nova tarefa: `💡 Token Pilot: assunto novo, /clear evita carregar o contexto antigo.`
 - Conversa longa: `💡 Token Pilot: bom momento para /compact manter: <resumo>.`
-- Medição: `💡 Token Pilot: rode a mesma tarefa em cada modelo e compare o /usage.`

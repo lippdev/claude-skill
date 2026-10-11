@@ -8,7 +8,7 @@ de `examples/estoque`, e compara custo, tempo, turnos e se a verificação da ta
 | Braço | O que roda |
 |---|---|
 | `opus-medium` | Sessão única no Opus 5.5 com effort `medium`, sem o pacote |
-| `token-pilot` | A mesma sessão com a pasta `.claude/` do pacote |
+| `token-pilot` | Opus 5.5 com effort `low` na sessão principal, que só coordena, com a pasta `.claude/` do pacote: o trabalho vai para os subagentes (Haiku 5.5, Sonnet 5.5 e Opus 5.5). Mude o effort com `--pilot-effort`. |
 | `ponytail` (opcional) | Sem o pacote, com o plugin do ponytail (`--ponytail <pasta>`) |
 
 As tarefas estão em `bench/tasks.json`, em três tamanhos. Cada uma tem um pedido, uma
@@ -42,7 +42,7 @@ os tokens por modelo (entrada, cache lido, cache escrito e saída).
 ```bash
 python3 bench/run.py run --dry-run                 # mostra os comandos, sem gastar nada
 python3 bench/run.py run --fake --runs 2           # testa o pipeline com respostas simuladas
-python3 bench/run.py run --runs 3 --plan pro       # benchmark de verdade
+python3 bench/run.py run --runs 3                 # benchmark de verdade
 python3 bench/run.py run --runs 3 --ponytail ~/ponytail   # com o terceiro braço
 python3 bench/run.py run --runs 3 --tiers pesada --jobs 4 # só um tamanho, 4 sessões em paralelo
 python3 bench/run.py compare bench/results/<arquivo>.jsonl
